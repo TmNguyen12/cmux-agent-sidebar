@@ -196,6 +196,17 @@ function buildRows(workspaces, epoch) {
 // One line per row, and only the time column keeps its natural width, so the
 // sidebar can be dragged narrow without wrapping.
 
+// Highlights use Catppuccin Mocha (https://catppuccin.com/palette). Mocha is a
+// dark theme; these read poorly on a light window.
+const MOCHA = {
+  cardFill: "#313244cc", // Surface0
+  cardOutline: "#b4befe59", // Lavender
+  focusFill: "#45475acc", // Surface1
+  hoverFill: "#45475a80", // Surface1
+  dirty: "#f9e2af", // Yellow
+};
+const CARD_RADIUS = 8;
+
 function fmtElapsed(secs) {
   const s = Math.max(0, Math.floor(secs));
   if (s < 60) return s + "s";
@@ -262,12 +273,12 @@ function groupRow(row) {
     Text(() => row().label)
       .font(12).weight("semibold").lineLimit(1).truncation("middle")
       .color(() => (row().selected ? "primary" : "secondary")),
-    Text(() => (row().dirty ? "✱" : "")).font(10).color("#FFD60A").fixedSize(),
+    Text(() => (row().dirty ? "✱" : "")).font(10).color(MOCHA.dirty).fixedSize(),
     Spacer(),
   ])
     .paddingHorizontal(8).paddingVertical(3)
-    .cornerRadius(6)
-    .hoverBackground("#7f7f7f1c")
+    .cornerRadius(CARD_RADIUS - 2)
+    .hoverBackground(MOCHA.hoverFill)
     .cursor("pointer")
     .frame({ maxWidth: "infinity" })
     .onTap(() => cmux("workspace.select", { workspace_id: row().wsId }));
@@ -289,9 +300,9 @@ function agentRow(row) {
       .font(10).monospaced().color("tertiary").lineLimit(1).fixedSize().layoutPriority(2),
   ])
     .paddingLeading(18).paddingTrailing(8).paddingVertical(2)
-    .cornerRadius(6)
-    .background(() => (row().focused ? "#7f7f7f2e" : null))
-    .hoverBackground("#7f7f7f1c")
+    .cornerRadius(CARD_RADIUS - 2)
+    .background(() => (row().focused ? MOCHA.focusFill : null))
+    .hoverBackground(MOCHA.hoverFill)
     .cursor("pointer")
     .frame({ maxWidth: "infinity" })
     .onTap(() => focusAgent(row()));
@@ -327,9 +338,9 @@ function cardView(card) {
     ForEach({ items: () => card().agents, key: (r) => r.key }, agentRow),
   ])
     .padding(3)
-    .cornerRadius(10)
-    .background(() => (selected() ? "#7f7f7f1f" : null))
-    .borderColor(() => (selected() ? "#7f7f7f59" : "clear"))
+    .cornerRadius(CARD_RADIUS)
+    .background(() => (selected() ? MOCHA.cardFill : null))
+    .borderColor(() => (selected() ? MOCHA.cardOutline : "clear"))
     .borderWidth(1)
     .frame({ maxWidth: "infinity" });
 }
