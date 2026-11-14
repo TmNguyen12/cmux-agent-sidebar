@@ -225,3 +225,10 @@ test("the list is capped with a +N more row at the end", () => {
   assert.equal(r[r.length - 1].kind, "more");
   assert.equal(r[r.length - 1].text, "+100 more");
 });
+
+test("kindColor paints Claude in its clay color and Codex in the text color", () => {
+  assert.equal(sb.kindColor("claude"), "#D97757");
+  assert.equal(sb.kindColor("codex"), "primary");
+  assert.equal(sb.kindColor("opencode"), "secondary");
+  assert.equal(sb.kindColor("constructor"), "secondary");
+});

@@ -32,10 +32,16 @@ function statusMeta(status) {
 }
 
 const KIND_SYMBOLS = { claude: "✻", codex: "◆" };
+// Claude in its clay brand color; Codex in the plain text color.
+const KIND_COLORS = { claude: "#D97757", codex: "primary" };
 
 function kindSymbol(kind) {
   if (Object.hasOwn(KIND_SYMBOLS, kind)) return KIND_SYMBOLS[kind];
   return kind ? String(kind)[0].toUpperCase() : "?";
+}
+
+function kindColor(kind) {
+  return Object.hasOwn(KIND_COLORS, kind) ? KIND_COLORS[kind] : "secondary";
 }
 
 function segments(path) {
@@ -260,7 +266,7 @@ function agentRow(row) {
   return HStack({ spacing: 5 }, [
     Text(() => statusMeta(a().status).mark)
       .font(10).color(() => statusMeta(a().status).color).fixedSize(),
-    Text(() => row().symbol).font(10).color("secondary").fixedSize(),
+    Text(() => row().symbol).font(12).weight("bold").color(() => kindColor(row().agent.kind)).fixedSize(),
     Text(() => row().title)
       .font(11).lineLimit(1).truncation("tail")
       .color(() => (a().status === "ended" ? "tertiary" : "primary")),
