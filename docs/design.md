@@ -1,7 +1,7 @@
 # cmux-agent-sidebar design
 
 createdAt: 2026-11-13 23:05 EST
-lastUpdated: 2026-11-14 02:10 EST
+lastUpdated: 2026-11-14 02:40 EST
 
 ## Intent
 
@@ -63,8 +63,10 @@ Placement: the left pane (chosen) or a right-sidebar panel, which has a
   | Otherwise | `<folder>` | folder |
   | Workspace with no folder | workspace title | folder |
 
-- Groups keep cmux's workspace order, so positions stay stable and match ⌘1…⌘9
-  when each workspace has its own folder.
+- Groups keep cmux's workspace order, so positions stay stable.
+- Each group shows its workspace's ⌘1…⌘9 key. A group that is only an agent's
+  folder (the agent was started outside its workspace's folder) shows
+  `in ⌘N`, the key of the workspace hosting it.
 
 ### Agent rows
 

@@ -101,6 +101,7 @@ Each agent goes in the group for its folder, or for the workspace folder that co
 
 - Groups keep cmux's workspace order.
 - `✱` means uncommitted changes.
+- `⌘2` on a group is the key that selects its workspace. `in ⌘1` means the group is just an agent's folder inside workspace 1. To give it its own key, move that tab out: `cmux move-tab-to-new-workspace --surface <surface>`.
 
 ## Rename an agent
 

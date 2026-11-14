@@ -101,6 +101,7 @@ function buildRows(workspaces, epoch) {
     let g = groups.get(id);
     if (!g) {
       g = { ...init, agents: [] };
+      if (init.owner) g.ownerOrder = init.order;
       groups.set(id, g);
     }
     if (g.branch === undefined && init.branch !== undefined) {
@@ -112,6 +113,7 @@ function buildRows(workspaces, epoch) {
     if (init.owner && (!g.owner || init.selected)) {
       g.wsId = init.wsId;
       g.owner = true;
+      g.ownerOrder = init.order;
     }
     g.order = Math.min(g.order, init.order);
     g.selected = g.selected || init.selected;
@@ -161,8 +163,13 @@ function buildRows(workspaces, epoch) {
     g.agents.sort((x, y) =>
       (statusMeta(x.agent.status).rank - statusMeta(y.agent.status).rank)
       || ((y.agent.lastActivityAt ?? 0) - (x.agent.lastActivityAt ?? 0)));
+    // ⌘1…⌘9 select workspaces, so a group shows its workspace's key. A group
+    // that is only an agent's folder shows the key of the workspace hosting it.
+    const shortcut = g.owner
+      ? (g.ownerOrder < 9 ? "⌘" + (g.ownerOrder + 1) : "")
+      : (g.order < 9 ? "in ⌘" + (g.order + 1) : "");
     out.push({
-      key: g.key, kind: "group", groupKind, label,
+      key: g.key, kind: "group", groupKind, label, shortcut,
       dirty: g.dirty === true, wsId: g.wsId, selected: g.selected === true,
       working: g.agents.filter((e) => e.agent.status === "working").length,
       waiting: g.agents.filter((e) => e.agent.status === "needs_input").length,
@@ -251,6 +258,7 @@ function groupRow(row) {
       .color(() => (row().selected ? "primary" : "secondary")),
     Text(() => (row().dirty ? "✱" : "")).font(10).color("#FFD60A").fixedSize(),
     Spacer(),
+    Text(() => row().shortcut).font(10).monospaced().color("tertiary").lineLimit(1).fixedSize(),
   ])
     .paddingHorizontal(8).paddingVertical(3).paddingTop(6)
     .cornerRadius(6)

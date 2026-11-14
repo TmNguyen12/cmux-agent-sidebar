@@ -232,3 +232,32 @@ test("kindColor paints Claude in its clay color and Codex in the text color", ()
   assert.equal(sb.kindColor("opencode"), "secondary");
   assert.equal(sb.kindColor("constructor"), "secondary");
 });
+
+test("a group owned by a workspace shows that workspace's shortcut", () => {
+  const r = rows([
+    ws("w1", { directory: "/r/a", index: 0 }),
+    ws("w2", { directory: "/r/b", index: 1 }),
+  ]);
+  assert.equal(group(r, "g:/r/a").shortcut, "⌘1");
+  assert.equal(group(r, "g:/r/b").shortcut, "⌘2");
+});
+
+test("a folder-only group points at the workspace hosting its agents", () => {
+  const r = rows([ws("w1", { directory: "/r/a", index: 0, agents: [agent("a1", "working", { directory: "/home" })] })]);
+  assert.equal(group(r, "g:/home").shortcut, "in ⌘1");
+});
+
+test("workspaces past the ninth get no shortcut", () => {
+  const r = rows([ws("w1", { directory: "/r/a", index: 9 })]);
+  assert.equal(group(r, "g:/r/a").shortcut, "");
+});
+
+test("a shared folder's shortcut follows the workspace its row selects", () => {
+  const r = rows([ws("w1", { directory: "/r/app", index: 0 }), ws("w2", { directory: "/r/app", index: 1, selected: true })]);
+  assert.equal(group(r, "g:/r/app").shortcut, "⌘2");
+});
+
+test("a workspace with no folder shows its own shortcut", () => {
+  const r = rows([ws("w1", { title: "scratch", index: 2 })]);
+  assert.equal(group(r, "g:ws:w1").shortcut, "⌘3");
+});
