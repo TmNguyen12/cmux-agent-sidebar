@@ -108,11 +108,8 @@ Each agent goes in the group for its folder, or for the workspace folder that co
 
 An agent's title is its terminal tab's title. Claude Code names the tab after the conversation. To rename it, rename the tab in cmux:
 
-- **From inside Claude Code**, type this as a prompt. The `!` runs it as a shell command in that tab:
-  ```
-  ! cmux rename-tab "Fix ingest retry"
-  ```
-- **From another terminal**, name the tab: `cmux rename-tab --surface <surface> "Fix ingest retry"`. `cmux tree` lists the surfaces.
+- **Press ⌘R** in the agent's tab and type the new name.
+- **Or from a script:** `cmux rename-tab --surface <surface> "Fix ingest retry"`. `cmux tree` lists the surfaces.
 
 If a tab is still titled with a path or the agent's name, the sidebar shows the agent's first prompt instead.
 
