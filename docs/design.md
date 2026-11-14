@@ -95,8 +95,8 @@ Every status is a dot, told apart by color. This is a personal tool and the user
 Header `Agents` with live running and waiting counts. Each group and its agents
 form a card; the selected workspace's card is raised with a lighter fill, a
 hairline outline and rounded corners (the runtime has no shadow). Highlight
-colors come from Catppuccin Mocha (Surface0 fill, Lavender outline, Surface1
-for focus and hover), kept in one `MOCHA` table in the sidebar file. Inside it, the
+colors are faint Catppuccin Mocha Lavender washes (5% card fill, 25% outline,
+8% focus, 6% hover), kept in one `MOCHA` table in the sidebar file. Inside it, the
 agent whose terminal has focus gets a faint fill. Group rows show the key, label
 and a `✱` when dirty. At most 200 rows, then "+N more".
 

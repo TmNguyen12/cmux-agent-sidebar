@@ -199,11 +199,12 @@ function buildRows(workspaces, epoch) {
 
 // Highlights use Catppuccin Mocha (https://catppuccin.com/palette). Mocha is a
 // dark theme; these read poorly on a light window.
+// Highlights are faint Lavender washes, not gray fills, to stay light.
 const MOCHA = {
-  cardFill: "#313244cc", // Surface0
-  cardOutline: "#b4befe59", // Lavender
-  focusFill: "#45475acc", // Surface1
-  hoverFill: "#45475a80", // Surface1
+  cardFill: "#b4befe0d", // Lavender 5%
+  cardOutline: "#b4befe40", // Lavender 25%
+  focusFill: "#b4befe14", // Lavender 8%
+  hoverFill: "#b4befe0f", // Lavender 6%
   dirty: "#f9e2af", // Yellow
 };
 const CARD_RADIUS = 6;
