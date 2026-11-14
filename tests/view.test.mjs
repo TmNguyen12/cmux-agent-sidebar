@@ -92,3 +92,9 @@ test("render handles a capped row list and many subagents", () => {
   const ctx = loadSidebar({ workspaces: many, epoch: 1000 });
   assert.doesNotThrow(() => ctx.__render());
 });
+
+test("agentTime says ago for done agents and ticks elapsed for running ones", () => {
+  assert.equal(sb.agentTime({ status: "idle", lastActivityAt: 880 }, 1000), "2m ago");
+  assert.equal(sb.agentTime({ status: "working", sinceEpoch: 880 }, 1000), "2m 00s");
+  assert.equal(sb.agentTime({ status: "needs_input", sinceEpoch: 970 }, 1000), "30s");
+});

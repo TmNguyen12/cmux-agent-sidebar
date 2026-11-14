@@ -76,7 +76,8 @@ One line: status mark, kind symbol, title, subagent count, time.
 - **Title:** the tab title (Claude Code's topic, or your rename); else the first
   prompt when the tab title is a path or the agent's name; else the folder.
 - **Subagents:** `↳N` when N subagents are running.
-- **Time:** live elapsed while running or waiting; "12m ago" when done.
+- **Time:** live elapsed while running or waiting (`4m 05s`); `12m ago` when done.
+- **Group key:** the workspace's `⌘N` sits left of the group name, away from the times.
 
 ### Status
 

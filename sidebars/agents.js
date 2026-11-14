@@ -214,10 +214,11 @@ function fmtAgo(secs) {
 const epochNow = () => data.clock()?.epoch ?? 0;
 const live = (a) => a.status === "working" || a.status === "needs_input";
 
-// Running or waiting: live elapsed. Done: how long ago.
+// Running or waiting: live elapsed in that state. Done: how long ago it
+// finished, said as "ago" so the two never read alike.
 function agentTime(a, epoch) {
   if (live(a) && a.sinceEpoch) return fmtElapsed(epoch - a.sinceEpoch);
-  if (a.lastActivityAt) return fmtAgo(epoch - a.lastActivityAt);
+  if (a.lastActivityAt) return fmtAgo(epoch - a.lastActivityAt) + " ago";
   return "";
 }
 
@@ -251,6 +252,8 @@ function headerRow() {
 
 function groupRow(row) {
   return HStack({ spacing: 5 }, [
+    // Leading, so the key sits by the name and never reads as a time.
+    Text(() => row().shortcut).font(10).monospaced().color("tertiary").lineLimit(1).fixedSize(),
     Image(() => (row().groupKind === "folder" ? "folder" : "arrow.triangle.branch"))
       .font(10).color("tertiary"),
     Text(() => row().label)
@@ -258,7 +261,6 @@ function groupRow(row) {
       .color(() => (row().selected ? "primary" : "secondary")),
     Text(() => (row().dirty ? "✱" : "")).font(10).color("#FFD60A").fixedSize(),
     Spacer(),
-    Text(() => row().shortcut).font(10).monospaced().color("tertiary").lineLimit(1).fixedSize(),
   ])
     .paddingHorizontal(8).paddingVertical(3).paddingTop(6)
     .cornerRadius(6)
