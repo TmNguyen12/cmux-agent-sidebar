@@ -136,11 +136,17 @@ function buildRows(workspaces, epoch) {
       });
     }
     for (const a of agents) {
-      const tab = (w.tabs ?? []).find((t) => t.id === a.panelId);
+      const tabs = w.tabs ?? [];
+      const tabIndex = tabs.findIndex((t) => t.id === a.panelId);
+      const tab = tabs[tabIndex];
       const dir = normPath(a.directory) ?? wsDir;
       const entry = {
         wsId: w.id, agent: a, title: agentTitle(a, tab, dir),
         focused: w.selected === true && tab?.focused === true,
+        // ⌃1…⌃9 pick a tab after ⌘N picks the workspace. The sidebar data has
+        // no split panes, so this assumes the workspace has none. A lone tab
+        // gets no key; there is nothing to pick between.
+        tabKey: tabs.length > 1 && tabIndex >= 0 && tabIndex < 9 ? "⌃" + (tabIndex + 1) : "",
       };
       if (!dir) {
         folderless(w, order).agents.push(entry);
@@ -179,9 +185,9 @@ function buildRows(workspaces, epoch) {
       waiting: g.agents.filter((e) => e.agent.status === "needs_input").length,
       total: g.agents.length,
     });
-    for (const { wsId, agent, title, focused } of g.agents) {
+    for (const { wsId, agent, title, focused, tabKey } of g.agents) {
       out.push({
-        key: "a:" + wsId + ":" + agent.id, kind: "agent", wsId, agent, title, focused,
+        key: "a:" + wsId + ":" + agent.id, kind: "agent", wsId, agent, title, focused, tabKey,
         symbol: kindSymbol(agent.kind),
         subagents: (agent.children ?? []).filter((c) => c.running).length,
       });
@@ -290,6 +296,7 @@ function groupRow(row) {
 function agentRow(row) {
   const a = () => row().agent;
   return HStack({ spacing: 5 }, [
+    Text(() => row().tabKey).font(10).monospaced().color("tertiary").lineLimit(1).fixedSize(),
     Text(() => statusMeta(a().status).mark)
       .font(10).color(() => statusMeta(a().status).color).fixedSize(),
     Text(() => row().symbol).font(12).weight("bold").color(() => kindColor(row().agent.kind)).fixedSize(),

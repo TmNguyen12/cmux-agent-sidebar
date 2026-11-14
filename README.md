@@ -101,6 +101,7 @@ Each agent goes in the group for its folder, or for the workspace folder that co
 
 - Groups keep cmux's workspace order.
 - `✱` means uncommitted changes.
+- `⌃2` on an agent is its tab key: press the group's `⌘N`, then `⌃2`. It only shows when the workspace has more than one tab.
 - `⌘2` on a group is the key that selects its workspace. `in ⌘1` means the group is just an agent's folder inside workspace 1. To give it its own key, move that tab out: `cmux move-tab-to-new-workspace --surface <surface>`.
 
 ## Rename an agent
@@ -128,6 +129,7 @@ Status colors and ordering are in [docs/design.md](docs/design.md#status).
 
 - **Grouped by where the agent started.** An agent started in `~/Repos` stays under `Repos`, even if it edits a worktree. Knowing which files an agent edits would need hooks.
 - **Background subagents drop out of `↳N` early.** cmux marks a subagent finished when the call that started it returns. A subagent launched in the background keeps running after that.
+- **Tab keys assume no split panes.** cmux numbers tabs per pane, but the sidebar only sees a workspace's tabs as one list. In a workspace with splits, `⌃N` can point at the wrong tab.
 - **Two workspaces on one folder share a group.** Clicking the group opens the selected one, else the first. Their agents stay clickable.
 
 ## Development

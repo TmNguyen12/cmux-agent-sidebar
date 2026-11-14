@@ -70,7 +70,7 @@ Placement: the left pane (chosen) or a right-sidebar panel, which has a
 
 ### Agent rows
 
-One line: status mark, kind symbol, title, subagent count, time.
+One line: tab key, status mark, kind symbol, title, subagent count, time.
 
 - **Kind symbol:** `✻` Claude in its clay color, `◆` Codex in the text color, else the kind's first letter.
 - **Title:** the tab title (Claude Code's topic, or your rename); else the first
@@ -78,6 +78,9 @@ One line: status mark, kind symbol, title, subagent count, time.
 - **Subagents:** `↳N` when N subagents are running.
 - **Time:** live elapsed while running or waiting (`4m 05s`); `12m ago` when done.
 - **Group key:** the workspace's `⌘N` sits left of the group name, away from the times.
+- **Tab key:** `⌃N`, the agent's tab position in its workspace, when the workspace
+  has more than one tab. The sidebar data has no split panes, so with splits the
+  number can point at the wrong tab.
 
 ### Status
 

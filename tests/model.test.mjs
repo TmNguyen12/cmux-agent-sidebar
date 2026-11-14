@@ -272,3 +272,24 @@ test("an agent row is focused when its tab is focused in the selected workspace"
   assert.equal(group(r, "a:w1:a2").focused, false);
   assert.equal(group(r, "a:w2:b1").focused, false);
 });
+
+test("an agent in a workspace with several tabs shows its tab key", () => {
+  const tabs = [{ id: "p1", title: "x" }, { id: "p2", title: "y" }];
+  const r = rows([ws("w1", {
+    directory: "/r/a", tabs,
+    agents: [agent("a1", "working", { panelId: "p2" }), agent("a2", "idle", { panelId: "p1" })],
+  })]);
+  assert.equal(group(r, "a:w1:a1").tabKey, "⌃2");
+  assert.equal(group(r, "a:w1:a2").tabKey, "⌃1");
+});
+
+test("no tab key when the workspace has one tab, the tab is unknown, or past the ninth", () => {
+  const ten = Array.from({ length: 10 }, (_, i) => ({ id: "p" + i, title: "t" }));
+  const r = rows([
+    ws("w1", { directory: "/r/a", tabs: [{ id: "p1", title: "x" }], agents: [agent("a1", "working", { panelId: "p1" })] }),
+    ws("w2", { directory: "/r/b", tabs: ten, agents: [agent("b1", "working"), agent("b2", "idle", { panelId: "p9" })] }),
+  ]);
+  assert.equal(group(r, "a:w1:a1").tabKey, "");
+  assert.equal(group(r, "a:w2:b1").tabKey, "");
+  assert.equal(group(r, "a:w2:b2").tabKey, "");
+});
