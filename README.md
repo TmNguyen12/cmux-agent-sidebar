@@ -73,8 +73,14 @@ Pull and rerun `./install.sh`. cmux hot-reloads the file. An unchanged file make
 - **Worktree:** the agent's folder, or the workspace's folder that contains it.
 - **Branch:** from the agent's terminal tab, otherwise the workspace.
 - Workspaces with no folder are listed under **Other**.
+- A folder icon instead of a branch icon means cmux knows no branch there, usually because it isn't a git checkout.
 
 Status colors and ordering are in [docs/design.md](docs/design.md#status).
+
+## Known limits
+
+- **Background subagents show ✓ early.** cmux marks a subagent finished when the call that started it returns. A subagent launched in the background keeps running after that.
+- **Two sessions of the same agent** are told apart by the second line: the first prompt, else the tab title.
 
 ## Development
 

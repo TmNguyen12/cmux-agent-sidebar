@@ -1,7 +1,7 @@
 # Security
 
 createdAt: 2026-11-13 23:55 EST
-lastUpdated: 2026-11-13 23:55 EST
+lastUpdated: 2026-11-14 00:40 EST
 
 This project exists partly for security reasons. It shows agent state in cmux without adding anything that runs on every agent turn. This page records what was considered and why the design is what it is.
 
@@ -13,7 +13,7 @@ This project exists partly for security reasons. It shows agent state in cmux wi
 | Background jobs? | No. No launchd agents, cron or daemons. |
 | Network access? | No. The sidebar runtime has none, and the installer makes no requests. |
 | Reads credentials or tokens? | No. |
-| Writes files? | The installer writes one file. The sidebar writes nothing. |
+| Writes files? | The installer writes only inside `~/.config/cmux/sidebars/`. The sidebar writes nothing. |
 | macOS permissions needed? | None. Not Screen Recording, Accessibility or Full Disk Access. |
 | Dependencies? | None, at runtime or for tests. |
 
@@ -38,21 +38,27 @@ This sidebar keeps the agent view and drops all four. Usage quotas are left to a
 
 The sidebar is one file, `sidebars/agents.js`, run by cmux's JavaScript sidebar runtime.
 
-- **Sandboxed by cmux.** No filesystem, network, timers or child processes. A watchdog stops runaway code.
-- **Reads:** workspace titles, folders, branches, dirty state, and each agent's kind, status, times and title.
-- **Actions:** only `workspace.select` and `surface.focus`, and only when you click a row. A test (`tests/view.test.mjs`) fails if any other cmux command appears.
+- **Contained by cmux's JS runtime.** No filesystem, network, timers or child processes, and a watchdog stops runaway code. This is a JavaScript context inside the cmux app (in-process by default), not an OS sandbox.
+- **Receives** the full workspace object cmux passes to every sidebar, including prompts, last messages, transcript paths and PR links.
+- **Displays** workspace titles, folders, branches, dirty state, and each agent's kind, status, times, first prompt or tab title, and subagent labels.
+- **Actions:** only `workspace.select` and `surface.focus`, and only from a click on a row. `tests/view.test.mjs` checks that:
+  - loading and rendering make no cmux calls;
+  - every click handler calls only those two commands;
+  - the source names no other cmux command and no `openURL`, `clipboard`, `TextField`, `fetch` or `log`.
+- **Clicks are bound to IDs.** A row's click uses the workspace or terminal ID, never a title, branch or prompt, so odd text can't redirect a click.
 - **No text fields and no clipboard.** It can't capture keystrokes or swap your clipboard.
-- **No links.** It never calls `openURL`.
-- **Untrusted strings are shown as plain text.** Branch names, folder names and prompts go through `Text`, which has no markup or link handling.
+- **Capped lists.** At most 200 rows and 5 subagents per agent. cmux drops a render that goes over its budget and keeps the last one, which would freeze stale statuses on screen.
 
 ## What the installer does
 
-`install.sh` is about 20 lines. Read it before running it.
+`install.sh` is about 30 lines. Read it before running it.
 
-- Writes `~/.config/cmux/sidebars/agents.js` and nothing else.
-- Backs up a different existing `agents.js` first.
+- Writes `~/.config/cmux/sidebars/agents.js`, creating the folder if needed.
+- Backs up a different existing `agents.js` first, as `agents.js.bak.<time>`.
+- Refuses to replace `agents.js` when it is a symlink, so a dotfiles manager's link isn't silently broken.
+- Runs exactly one cmux command: `cmux sidebar validate agents`.
 - No `sudo`, no network, no changes to `~/.claude` or `~/.codex`.
-- `tests/install.test.mjs` runs it against a throwaway home folder and fails if any other file appears.
+- `tests/install.test.mjs` runs it in a throwaway folder (home, working folder and temp) and fails on any other file, symlink or cmux command.
 
 ## Decisions
 
@@ -63,8 +69,19 @@ The sidebar is one file, `sidebars/agents.js`, run by cmux's JavaScript sidebar 
 
 ## Known exposure
 
+- **Markdown in titles is unverified.** Branch names, folder names, prompts and subagent labels go through cmux's `Text`. The cmux docs don't say whether `Text` renders Markdown. If it does, a prompt like `[x](https://example.com)` could show as a link you might click. Check it with the steps in [Verify by hand](#verify-by-hand).
 - **Prompts on screen.** An agent's title is its first prompt. It shows in the sidebar, so it is visible when you share your screen.
 - **cmux itself.** The wrapper and sidebar runtime are cmux's code, out of scope here. A bug in the runtime's sandbox would affect every custom sidebar.
+
+## Verify by hand
+
+1. In a cmux terminal, start `claude` and send this as the first prompt: `**bold** [link](https://example.com)`.
+2. Look at the agent's second line in the sidebar.
+
+| You see | Meaning |
+|---|---|
+| The literal text, with `**` and brackets | Plain text. Nothing to do. |
+| Bold text or a link | cmux renders Markdown. Don't click links in the sidebar, and open an issue here. |
 
 ## Development-time note
 
