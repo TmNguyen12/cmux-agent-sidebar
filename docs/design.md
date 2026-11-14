@@ -97,7 +97,13 @@ form a card; the selected workspace's card is raised with a lighter fill, a
 hairline outline and rounded corners (the runtime has no shadow). Highlight
 colors sink into Catppuccin Mocha Crust (70% card fill, full for focus, 40%
 hover) with a 25% Lavender outline, kept in one `MOCHA` table in the sidebar
-file. Inside it, the
+file.
+
+The author's terminal background is Crust too (`background = #11111b` in the
+Ghostty config), and cmux's `matchTerminalBackground` paints the sidebar to
+match. On that background the card fill disappears and the Lavender outline
+alone marks the selected card. That is intended: on a Base background the
+fill shows again. Inside it, the
 agent whose terminal has focus gets a faint fill. Group rows show the key, label
 and a `✱` when dirty. At most 200 rows, then "+N more".
 
