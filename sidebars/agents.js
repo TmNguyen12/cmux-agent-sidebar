@@ -1,4 +1,5 @@
-// agents: repo → worktree → coding agents, with live status.
+// agents: worktrees, repos and folders, each with its coding agents and their
+// live status. Meant as the left pane, in place of the workspace list.
 //
 // Reads only cmux's own sidebar data (data.workspaces, data.clock). cmux learns
 // agent state from its bundled claude/codex wrapper, so this sidebar needs no
@@ -15,19 +16,26 @@ const ENDED_VISIBLE_SECS = 15 * 60;
 
 // cmux asks sidebars to cap long lists: a render over the runtime's budget is
 // discarded and the last good one stays up, which would freeze stale statuses.
-const MAX_CHILDREN = 5;
 const MAX_ROWS = 200;
 
+// Done is green AND a check mark, so state never rests on color alone.
 const STATUS = {
-  needs_input: { glyph: "❓", label: "waiting on you", color: "#FF9F0A", rank: 0 },
-  working: { glyph: "⚡", label: "working", color: "#30D158", rank: 1 },
-  idle: { glyph: "✓", label: "done", color: "#8E8E93", rank: 2 },
-  ended: { glyph: "·", label: "ended", color: "#7f7f7f66", rank: 3 },
+  needs_input: { mark: "●", label: "waiting on you", color: "#FF9F0A", rank: 0 },
+  working: { mark: "●", label: "running", color: "#0A84FF", rank: 1 },
+  idle: { mark: "✓", label: "done", color: "#30D158", rank: 2 },
+  ended: { mark: "○", label: "ended", color: "#8E8E93", rank: 3 },
 };
 
 function statusMeta(status) {
   if (Object.hasOwn(STATUS, status)) return STATUS[status];
-  return { glyph: "·", label: String(status), color: "#7f7f7f66", rank: 9 };
+  return { mark: "○", label: String(status), color: "#8E8E93", rank: 9 };
+}
+
+const KIND_SYMBOLS = { claude: "✻", codex: "◆" };
+
+function kindSymbol(kind) {
+  if (Object.hasOwn(KIND_SYMBOLS, kind)) return KIND_SYMBOLS[kind];
+  return kind ? String(kind)[0].toUpperCase() : "?";
 }
 
 function segments(path) {
@@ -40,142 +48,137 @@ function normPath(path) {
   return String(path).replace(/\/+$/, "") || "/";
 }
 
-// `<repo>` from …/worktrees/<repo>/<branch>, else the folder name.
-function repoOf(path) {
+// A worktree (…/worktrees/<repo>/<rest>), else a git checkout (branch known),
+// else a plain folder.
+function groupLabel(path, branch) {
   const parts = segments(path);
   const i = parts.lastIndexOf("worktrees");
-  if (i >= 0 && i < parts.length - 1) return parts[i + 1];
-  return parts.length ? parts[parts.length - 1] : "Other";
+  if (i >= 0 && i < parts.length - 2) {
+    return { groupKind: "worktree", label: parts[i + 1] + " / " + (branch ?? parts.slice(i + 2).join("/")) };
+  }
+  const name = parts.length ? parts[parts.length - 1] : path;
+  if (branch !== undefined) return { groupKind: "repo", label: name + " · " + branch };
+  return { groupKind: "folder", label: name };
+}
+
+// Claude Code names its terminal tab after the conversation, and a tab you
+// rename in cmux keeps your name, so the tab title tells sessions apart. A tab
+// still titled with a path or the agent's own name says nothing; use the first
+// prompt instead.
+function agentTitle(agent, tab, dir) {
+  const t = String(tab?.title ?? "").trim();
+  const generic = !t || t.startsWith("/") || t.startsWith("~")
+    || [agent.kind, agent.name].some((n) => n && t.toLowerCase() === String(n).toLowerCase());
+  if (!generic) return t;
+  return agent.title || segments(dir).pop() || agent.name || "agent";
 }
 
 function visible(agent, epoch) {
   return agent.status !== "ended" || epoch - (agent.lastActivityAt ?? 0) <= ENDED_VISIBLE_SECS;
 }
 
-// Flat, keyed row list for one ForEach: repo headers, worktree rows, agent rows
-// and subagent rows, in display order. Keys encode the row kind, so a key's
+// Flat, keyed row list for one ForEach: a group row per worktree, repo or
+// folder, each followed by its agent rows. Keys encode the row kind, so a key's
 // template never changes kind across live updates.
 function buildRows(workspaces, epoch) {
-  // Longest workspace directory first, so an agent in a subfolder lands on
-  // the most specific worktree that contains it.
+  // Longest workspace folder first, so an agent in a subfolder lands in the
+  // most specific workspace folder that contains it.
   const wsDirs = workspaces
     .map((w) => normPath(w.directory))
     .filter((d) => d)
     .sort((a, b) => b.length - a.length);
-  const worktreeOf = (dir) =>
+  const groupOf = (dir) =>
     wsDirs.find((d) => dir === d || dir.startsWith(d + "/")) ?? dir;
 
-  const trees = new Map();
+  const groups = new Map();
   const ensure = (id, init) => {
-    let t = trees.get(id);
-    if (!t) {
-      t = { ...init, agents: [] };
-      trees.set(id, t);
+    let g = groups.get(id);
+    if (!g) {
+      g = { ...init, agents: [] };
+      groups.set(id, g);
     }
-    if (t.branch === undefined && init.branch !== undefined) {
-      t.branch = init.branch;
-      t.dirty = init.dirty;
+    if (g.branch === undefined && init.branch !== undefined) {
+      g.branch = init.branch;
+      g.dirty = init.dirty;
     }
-    // A worktree row switches to the workspace that owns the folder,
-    // preferring the selected one, not whichever agent was seen first.
-    if (init.owner && (!t.owner || init.selected)) {
-      t.wsId = init.wsId;
-      t.owner = true;
+    // A group row switches to the workspace that owns the folder, preferring
+    // the selected one, not whichever agent was seen first.
+    if (init.owner && (!g.owner || init.selected)) {
+      g.wsId = init.wsId;
+      g.owner = true;
     }
-    t.selected = t.selected || init.selected;
-    return t;
+    g.order = Math.min(g.order, init.order);
+    g.selected = g.selected || init.selected;
+    return g;
   };
-  const folderless = (w) =>
+  const folderless = (w, order) =>
     ensure("ws:" + w.id, {
-      key: "t:ws:" + w.id, repo: "Other", title: w.title, wsId: w.id, owner: true, selected: w.selected,
+      key: "g:ws:" + w.id, title: w.title, wsId: w.id, owner: true, selected: w.selected, order,
     });
 
-  for (const w of workspaces) {
+  workspaces.forEach((w, position) => {
+    const order = w.index ?? position;
     const wsDir = normPath(w.directory);
     const agents = (w.agents ?? []).filter((a) => visible(a, epoch));
     if (wsDir) {
       ensure(wsDir, {
-        key: "t:" + wsDir, path: wsDir, repo: repoOf(wsDir),
-        branch: w.branch, dirty: w.dirty, wsId: w.id, owner: true, selected: w.selected,
+        key: "g:" + wsDir, path: wsDir, branch: w.branch, dirty: w.dirty,
+        wsId: w.id, owner: true, selected: w.selected, order,
       });
     }
     for (const a of agents) {
       const tab = (w.tabs ?? []).find((t) => t.id === a.panelId);
       const dir = normPath(a.directory) ?? wsDir;
-      const entry = { wsId: w.id, agent: a, subtitle: a.title || tab?.title || segments(dir).pop() || a.name };
+      const entry = { wsId: w.id, agent: a, title: agentTitle(a, tab, dir) };
       if (!dir) {
-        folderless(w).agents.push(entry);
+        folderless(w, order).agents.push(entry);
         continue;
       }
-      const path = worktreeOf(dir);
+      const path = groupOf(dir);
       const own = path === wsDir;
       ensure(path, {
-        key: "t:" + path, path, repo: repoOf(path),
+        key: "g:" + path, path,
         branch: tab?.branch ?? (own ? w.branch : undefined),
         dirty: tab?.dirty ?? (own ? w.dirty : undefined),
-        wsId: w.id, owner: own, selected: own && w.selected,
+        wsId: w.id, owner: own, selected: own && w.selected, order,
       }).agents.push(entry);
     }
-    if (!wsDir && agents.length === 0) folderless(w);
-  }
-
-  const repos = new Map();
-  for (const t of trees.values()) {
-    t.label = t.branch ?? t.title ?? segments(t.path).pop() ?? t.path;
-    t.agents.sort((x, y) =>
-      (statusMeta(x.agent.status).rank - statusMeta(y.agent.status).rank)
-      || ((y.agent.lastActivityAt ?? 0) - (x.agent.lastActivityAt ?? 0)));
-    if (!repos.has(t.repo)) repos.set(t.repo, { repo: t.repo, trees: [], working: 0, waiting: 0, total: 0 });
-    const r = repos.get(t.repo);
-    r.trees.push(t);
-    for (const { agent } of t.agents) {
-      r.total += 1;
-      if (agent.status === "working") r.working += 1;
-      if (agent.status === "needs_input") r.waiting += 1;
-    }
-  }
-
-  const ordered = [...repos.values()].sort((a, b) =>
-    (Number(b.waiting > 0) - Number(a.waiting > 0))
-    || (Number(b.working > 0) - Number(a.working > 0))
-    || a.repo.localeCompare(b.repo));
+    if (!wsDir && agents.length === 0) folderless(w, order);
+  });
 
   const out = [];
-  for (const r of ordered) {
+  const ordered = [...groups.values()].sort((a, b) => a.order - b.order);
+  for (const g of ordered) {
+    const { groupKind, label } = g.path === undefined
+      ? { groupKind: "folder", label: g.title || "untitled" }
+      : groupLabel(g.path, g.branch);
+    g.agents.sort((x, y) =>
+      (statusMeta(x.agent.status).rank - statusMeta(y.agent.status).rank)
+      || ((y.agent.lastActivityAt ?? 0) - (x.agent.lastActivityAt ?? 0)));
     out.push({
-      key: "r:" + r.repo, kind: "repo", repo: r.repo,
-      working: r.working, waiting: r.waiting, total: r.total,
+      key: g.key, kind: "group", groupKind, label,
+      dirty: g.dirty === true, wsId: g.wsId, selected: g.selected === true,
+      working: g.agents.filter((e) => e.agent.status === "working").length,
+      waiting: g.agents.filter((e) => e.agent.status === "needs_input").length,
+      total: g.agents.length,
     });
-    r.trees.sort((a, b) => String(a.label).localeCompare(String(b.label)));
-    for (const t of r.trees) {
+    for (const { wsId, agent, title } of g.agents) {
       out.push({
-        key: t.key, kind: "worktree", path: t.path, label: t.label, isGit: t.branch !== undefined,
-        dirty: t.dirty === true, wsId: t.wsId, selected: t.selected === true,
+        key: "a:" + wsId + ":" + agent.id, kind: "agent", wsId, agent, title,
+        symbol: kindSymbol(agent.kind),
+        subagents: (agent.children ?? []).filter((c) => c.running).length,
       });
-      for (const { wsId, agent, subtitle } of t.agents) {
-        const id = wsId + ":" + agent.id;
-        out.push({ key: "a:" + id, kind: "agent", wsId, agent, subtitle });
-        const children = [...(agent.children ?? [])].sort((x, y) =>
-          (Number(y.running) - Number(x.running)) || ((x.startedEpoch ?? 0) - (y.startedEpoch ?? 0)));
-        for (const child of children.slice(0, MAX_CHILDREN)) {
-          out.push({ key: "c:" + id + ":" + child.id, kind: "child", wsId, agent, child });
-        }
-        if (children.length > MAX_CHILDREN) {
-          const text = "+" + (children.length - MAX_CHILDREN) + " more subagents";
-          out.push({ key: "m:" + id, kind: "more", wsId, agent, text });
-        }
-      }
     }
   }
-  // Repos that need you sort first, so the cap drops the least urgent rows.
   if (out.length > MAX_ROWS) {
-    const text = "+" + (out.length - MAX_ROWS) + " more rows";
-    return [...out.slice(0, MAX_ROWS), { key: "m:rows", kind: "more", text }];
+    return [...out.slice(0, MAX_ROWS), { key: "m:rows", kind: "more", text: "+" + (out.length - MAX_ROWS) + " more" }];
   }
   return out;
 }
 
 // ── view ─────────────────────────────────────────────────────────────────────
+// One line per row, and only the time column keeps its natural width, so the
+// sidebar can be dragged narrow without wrapping.
 
 function fmtElapsed(secs) {
   const s = Math.max(0, Math.floor(secs));
@@ -198,10 +201,10 @@ function fmtAgo(secs) {
 const epochNow = () => data.clock()?.epoch ?? 0;
 const live = (a) => a.status === "working" || a.status === "needs_input";
 
-// In-flight agents tick a live elapsed; settled ones show how long ago.
+// Running or waiting: live elapsed. Done: how long ago.
 function agentTime(a, epoch) {
   if (live(a) && a.sinceEpoch) return fmtElapsed(epoch - a.sinceEpoch);
-  if (a.lastActivityAt) return fmtAgo(epoch - a.lastActivityAt) + " ago";
+  if (a.lastActivityAt) return fmtAgo(epoch - a.lastActivityAt);
   return "";
 }
 
@@ -210,18 +213,12 @@ function focusAgent(row) {
   if (row.agent.surfaceId) cmux("surface.focus", { surface_id: row.agent.surfaceId, workspace_id: row.wsId });
 }
 
-// Status bar on the left edge: coloured while the agent needs attention or is
-// running, invisible otherwise, so the eye lands on live rows first.
-function edgeBar(colorFn) {
-  return RoundedRectangle({ width: 3, height: 26, cornerRadius: 1.5 }).fill(colorFn);
-}
-
 const rows = computed(() => buildRows(data.workspaces() ?? [], epochNow()));
 
 const counts = computed(() => {
   const c = { working: 0, waiting: 0 };
   for (const r of rows()) {
-    if (r.kind !== "repo") continue;
+    if (r.kind !== "group") continue;
     c.working += r.working;
     c.waiting += r.waiting;
   }
@@ -229,44 +226,27 @@ const counts = computed(() => {
 });
 
 function headerRow() {
-  return HStack({ spacing: 8 }, [
-    Text("Agents").font(14).weight("semibold").monospaced().lineLimit(1).fixedSize(),
+  return HStack({ spacing: 6 }, [
+    Text("Agents").font(13).weight("semibold").lineLimit(1),
     Spacer(),
-    Text(() => (counts().waiting > 0 ? "❓ " + counts().waiting : ""))
-      .font(11).monospaced().color(STATUS.needs_input.color).fixedSize(),
-    Text(() => (counts().working > 0 ? "⚡ " + counts().working : ""))
-      .font(11).monospaced().color(STATUS.working.color).fixedSize(),
-    Text(() => data.clock()?.time ?? "").font(11).monospaced().color("tertiary").lineLimit(1).fixedSize(),
-  ]).paddingHorizontal(10);
+    Text(() => (counts().waiting > 0 ? "● " + counts().waiting : ""))
+      .font(11).monospaced().color(STATUS.needs_input.color).lineLimit(1).fixedSize(),
+    Text(() => (counts().working > 0 ? "● " + counts().working : ""))
+      .font(11).monospaced().color(STATUS.working.color).lineLimit(1).fixedSize(),
+  ]).paddingHorizontal(8);
 }
 
-function repoRow(row) {
-  return HStack({ spacing: 6 }, [
-    Text(() => row().repo.toUpperCase())
-      .font(10).weight("semibold").monospaced().color("secondary")
-      .lineLimit(1).truncation("tail"),
-    Spacer(),
-    Text(() => (row().waiting > 0 ? "❓" + row().waiting : ""))
-      .font(10).monospaced().color(STATUS.needs_input.color),
-    Text(() => (row().working > 0 ? "⚡" + row().working : ""))
-      .font(10).monospaced().color(STATUS.working.color),
-    Text(() => String(row().total)).font(10).monospaced().color("tertiary"),
-  ]).paddingHorizontal(10).paddingTop(10);
-}
-
-function worktreeRow(row) {
-  return HStack({ spacing: 6 }, [
-    edgeBar(() => (row().selected ? "accent" : "clear")),
-    // A folder icon when cmux knows no branch, so a plain folder that shares
-    // its repo header's name reads as a folder, not a second repo.
-    Image(() => (row().isGit ? "arrow.triangle.branch" : "folder")).font(10).color("tertiary"),
+function groupRow(row) {
+  return HStack({ spacing: 5 }, [
+    Image(() => (row().groupKind === "folder" ? "folder" : "arrow.triangle.branch"))
+      .font(10).color("tertiary"),
     Text(() => row().label)
-      .font(12).monospaced().lineLimit(1).truncation("middle")
+      .font(12).weight("semibold").lineLimit(1).truncation("middle")
       .color(() => (row().selected ? "primary" : "secondary")),
-    Text(() => (row().dirty ? "✱" : "")).font(11).color("#FFD60A"),
+    Text(() => (row().dirty ? "✱" : "")).font(10).color("#FFD60A").fixedSize(),
     Spacer(),
   ])
-    .paddingHorizontal(6).paddingVertical(2)
+    .paddingHorizontal(8).paddingVertical(3).paddingTop(6)
     .cornerRadius(6)
     .background(() => (row().selected ? "#7f7f7f24" : null))
     .hoverBackground("#7f7f7f1c")
@@ -277,24 +257,20 @@ function worktreeRow(row) {
 
 function agentRow(row) {
   const a = () => row().agent;
-  return HStack({ spacing: 6 }, [
-    edgeBar(() => (live(a()) ? statusMeta(a().status).color : "clear")),
-    VStack({ spacing: 1 }, [
-      HStack({ spacing: 6 }, [
-        Text(() => statusMeta(a().status).glyph).font(11).color(() => statusMeta(a().status).color),
-        Text(() => a().kind ?? a().name).font(11).monospaced().color("secondary").lineLimit(1),
-        Text(() => statusMeta(a().status).label).font(11).color(() => statusMeta(a().status).color),
-        Spacer(),
-        Text(() => agentTime(a(), epochNow())).font(10).monospaced().color("tertiary")
-          .lineLimit(1).fixedSize().layoutPriority(2),
-      ]),
-      // Never empty: the first prompt, else the tab title, else the folder, so
-      // two sessions of the same agent kind can be told apart.
-      Text(() => row().subtitle ?? "")
-        .font(10).color("tertiary").lineLimit(1).truncation("tail"),
-    ]),
+  return HStack({ spacing: 5 }, [
+    Text(() => statusMeta(a().status).mark)
+      .font(10).color(() => statusMeta(a().status).color).fixedSize(),
+    Text(() => row().symbol).font(10).color("secondary").fixedSize(),
+    Text(() => row().title)
+      .font(11).lineLimit(1).truncation("tail")
+      .color(() => (a().status === "ended" ? "tertiary" : "primary")),
+    Text(() => (row().subagents > 0 ? "↳" + row().subagents : ""))
+      .font(10).monospaced().color(STATUS.working.color).fixedSize(),
+    Spacer(),
+    Text(() => agentTime(a(), epochNow()))
+      .font(10).monospaced().color("tertiary").lineLimit(1).fixedSize().layoutPriority(2),
   ])
-    .paddingLeading(16).paddingTrailing(6).paddingVertical(2)
+    .paddingLeading(18).paddingTrailing(8).paddingVertical(2)
     .cornerRadius(6)
     .hoverBackground("#7f7f7f1c")
     .cursor("pointer")
@@ -302,52 +278,25 @@ function agentRow(row) {
     .onTap(() => focusAgent(row()));
 }
 
-function childRow(row) {
-  const c = () => row().child;
-  return HStack({ spacing: 6 }, [
-    Text("↳").font(10).monospaced().color("tertiary"),
-    Text(() => (c().running ? "⚡" : "✓")).font(10)
-      .color(() => (c().running ? STATUS.working.color : "tertiary")),
-    Text(() => c().label ?? "subagent")
-      .font(10).lineLimit(1).truncation("tail")
-      .color(() => (c().running ? "secondary" : "tertiary")),
-    Spacer(),
-    Text(() => {
-      const end = c().running ? epochNow() : (c().endedEpoch ?? epochNow());
-      return fmtElapsed(end - (c().startedEpoch ?? end));
-    }).font(10).monospaced().color("tertiary").lineLimit(1).fixedSize().layoutPriority(2),
-  ])
-    .paddingLeading(28).paddingTrailing(6).paddingVertical(1)
-    .cornerRadius(6)
-    .hoverBackground("#7f7f7f1c")
-    .frame({ maxWidth: "infinity" })
-    .onTap(() => focusAgent(row()));
-}
-
-// "+N more" after a capped list. Under an agent it opens that agent; at the
-// end of the whole list there is nothing to open.
 function moreRow(row) {
   return Text(() => row().text)
     .font(10).color("tertiary").lineLimit(1)
-    .paddingLeading(() => (row().agent ? 28 : 10)).paddingVertical(1)
-    .frame({ maxWidth: "infinity" })
-    .onTap(() => {
-      if (row().agent) focusAgent(row());
-    });
+    .paddingHorizontal(8).paddingVertical(2)
+    .frame({ maxWidth: "infinity" });
 }
 
-const ROW_VIEWS = { repo: repoRow, worktree: worktreeRow, agent: agentRow, child: childRow, more: moreRow };
+const ROW_VIEWS = { group: groupRow, agent: agentRow, more: moreRow };
 
 sidebar(() =>
-  VStack({ spacing: 4 }, [
+  VStack({ spacing: 1 }, [
     headerRow(),
     Divider(),
     ForEach({ items: rows, key: (r) => r.key }, (r) => ROW_VIEWS[r().kind](r)),
     Text(() => (rows().length === 0
-      ? "No workspaces yet. Agents started in cmux terminals show up here with live status."
+      ? "No workspaces yet. Agents started in cmux terminals show up here."
       : ""))
-      .font(11).color("tertiary").paddingHorizontal(10),
+      .font(11).color("tertiary").paddingHorizontal(8),
     Spacer(),
-  ]).paddingHorizontal(6).paddingVertical(8),
+  ]).paddingHorizontal(4).paddingVertical(8),
   { surface: "glass" },
 );

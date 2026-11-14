@@ -4,54 +4,101 @@ import { loadSidebar, ws, agent } from "./harness.mjs";
 
 const EPOCH = 1000;
 const sb = loadSidebar();
-// The sidebar runs in its own vm realm; copy rows into this realm so
-// deepStrictEqual compares values, not Array prototypes.
-const rows = (workspaces, epoch = EPOCH) => JSON.parse(JSON.stringify(sb.buildRows(workspaces, epoch)));
+// The sidebar runs in its own vm realm; copy results into this realm so
+// deepStrictEqual compares values, not prototypes.
+const host = (v) => JSON.parse(JSON.stringify(v));
+const rows = (workspaces, epoch = EPOCH) => host(sb.buildRows(workspaces, epoch));
 const keys = (workspaces, epoch) => rows(workspaces, epoch).map((r) => r.key);
+const group = (r, key) => r.find((x) => x.key === key);
 
-test("repoOf takes the segment after worktrees/", () => {
-  assert.equal(sb.repoOf("/Users/t/Work/worktrees/bluebird/feat/x"), "bluebird");
+test("statusMeta orders waiting, running, done, ended, then unknown", () => {
+  assert.deepEqual(
+    ["needs_input", "working", "idle", "ended", "bogus"].map((s) => sb.statusMeta(s).rank),
+    [0, 1, 2, 3, 9],
+  );
 });
 
-test("repoOf falls back to the last path segment, ignoring a trailing slash", () => {
-  assert.equal(sb.repoOf("/Users/t/Repos/cmux-agent-sidebar/"), "cmux-agent-sidebar");
+test("statusMeta marks done with a green check", () => {
+  assert.equal(sb.statusMeta("idle").mark, "✓");
+  assert.equal(sb.statusMeta("idle").color, "#30D158");
+  assert.equal(sb.statusMeta("working").color, "#0A84FF");
+  assert.equal(sb.statusMeta("needs_input").color, "#FF9F0A");
 });
 
-test("repoOf never returns an empty name when worktrees is the last segment", () => {
-  assert.equal(sb.repoOf("/x/worktrees"), "worktrees");
+test("statusMeta ignores inherited object keys", () => {
+  assert.equal(sb.statusMeta("constructor").rank, 9);
 });
 
-test("repoOf without a path is Other", () => {
-  assert.equal(sb.repoOf(undefined), "Other");
+test("kindSymbol is a star for Claude, a diamond for Codex, else a letter", () => {
+  assert.equal(sb.kindSymbol("claude"), "✻");
+  assert.equal(sb.kindSymbol("codex"), "◆");
+  assert.equal(sb.kindSymbol("opencode"), "O");
+  assert.equal(sb.kindSymbol(undefined), "?");
 });
 
-test("statusMeta ranks needs_input first and unknown statuses last", () => {
-  assert.equal(sb.statusMeta("needs_input").rank, 0);
-  assert.equal(sb.statusMeta("working").rank, 1);
-  assert.equal(sb.statusMeta("idle").rank, 2);
-  assert.equal(sb.statusMeta("ended").rank, 3);
-  assert.equal(sb.statusMeta("bogus").rank, 9);
-  assert.equal(sb.statusMeta("bogus").label, "bogus");
+test("groupLabel names a worktree by repo and branch", () => {
+  assert.deepEqual(host(sb.groupLabel("/r/worktrees/app/feat-x", "feat/x")),
+    { groupKind: "worktree", label: "app / feat/x" });
 });
 
-test("workspace with no directory and no agents is listed under Other by title", () => {
+test("groupLabel falls back to the worktree folder when the branch is unknown", () => {
+  assert.deepEqual(host(sb.groupLabel("/r/worktrees/app/feat-x", undefined)),
+    { groupKind: "worktree", label: "app / feat-x" });
+});
+
+test("groupLabel names a git checkout by folder and branch", () => {
+  assert.deepEqual(host(sb.groupLabel("/Users/t/dotfiles", "master")),
+    { groupKind: "repo", label: "dotfiles · master" });
+});
+
+test("groupLabel names a plain folder by its name", () => {
+  assert.deepEqual(host(sb.groupLabel("/Users/t/Repos", undefined)),
+    { groupKind: "folder", label: "Repos" });
+});
+
+test("groupLabel treats a bare worktrees folder as a plain folder", () => {
+  assert.deepEqual(host(sb.groupLabel("/r/worktrees/app", undefined)),
+    { groupKind: "folder", label: "app" });
+});
+
+test("groupLabel labels the root folder /", () => {
+  assert.equal(sb.groupLabel("/", undefined).label, "/");
+});
+
+test("agentTitle prefers the tab title", () => {
+  assert.equal(sb.agentTitle(agent("a", "working", { title: "first prompt" }), { title: "Fix ingest retry" }, "/r/app"),
+    "Fix ingest retry");
+});
+
+test("agentTitle skips a path-like or name-like tab title for the first prompt", () => {
+  const a = agent("a", "working", { title: "first prompt", kind: "claude" });
+  assert.equal(sb.agentTitle(a, { title: "~/dotfiles" }, "/r/app"), "first prompt");
+  assert.equal(sb.agentTitle(a, { title: "/r/app" }, "/r/app"), "first prompt");
+  assert.equal(sb.agentTitle(a, { title: "Claude" }, "/r/app"), "first prompt");
+});
+
+test("agentTitle falls back to the folder name", () => {
+  assert.equal(sb.agentTitle(agent("a", "working"), undefined, "/r/app"), "app");
+});
+
+test("a workspace with no folder is its own group, named by title", () => {
   const r = rows([ws("w1", { title: "scratch" })]);
-  assert.deepEqual(r.map((x) => x.key), ["r:Other", "t:ws:w1"]);
-  assert.equal(r[1].label, "scratch");
-  assert.equal(r[1].wsId, "w1");
+  assert.deepEqual(r.map((x) => x.key), ["g:ws:w1"]);
+  assert.equal(r[0].label, "scratch");
+  assert.equal(r[0].groupKind, "folder");
 });
 
-test("agent with no directory or panelId uses its workspace's worktree and branch", () => {
+test("an agent with no folder or tab lands in its workspace's group", () => {
   const r = rows([ws("w1", {
     directory: "/r/worktrees/app/main", branch: "main", dirty: true,
     agents: [agent("a1", "working")],
   })]);
-  assert.deepEqual(r.map((x) => x.key), ["r:app", "t:/r/worktrees/app/main", "a:w1:a1"]);
-  assert.equal(r[1].label, "main");
-  assert.equal(r[1].dirty, true);
+  assert.deepEqual(r.map((x) => x.key), ["g:/r/worktrees/app/main", "a:w1:a1"]);
+  assert.equal(r[0].label, "app / main");
+  assert.equal(r[0].dirty, true);
 });
 
-test("agents in one workspace but different worktrees get separate worktree rows", () => {
+test("agents in one workspace but different worktrees get separate groups", () => {
   const k = keys([ws("w1", {
     directory: "/r/worktrees/app/main", branch: "main",
     agents: [
@@ -59,46 +106,48 @@ test("agents in one workspace but different worktrees get separate worktree rows
       agent("a2", "idle", { directory: "/r/worktrees/app/feat" }),
     ],
   })]);
-  assert.deepEqual(k, [
-    "r:app",
-    "t:/r/worktrees/app/feat", "a:w1:a2",
-    "t:/r/worktrees/app/main", "a:w1:a1",
-  ]);
+  assert.deepEqual(k, ["g:/r/worktrees/app/main", "a:w1:a1", "g:/r/worktrees/app/feat", "a:w1:a2"]);
 });
 
-test("a worktree with no branch info is labelled by its folder, not the workspace branch", () => {
-  const r = rows([ws("w1", {
-    directory: "/r/worktrees/app/main", branch: "main",
-    agents: [agent("a2", "idle", { directory: "/r/worktrees/app/feat" })],
-  })]);
-  assert.equal(r.find((x) => x.key === "t:/r/worktrees/app/feat").label, "feat");
-});
-
-test("two workspaces on the same worktree path share one worktree row", () => {
+test("two workspaces on one folder share one group", () => {
   const k = keys([
     ws("w1", { directory: "/r/app", agents: [agent("a1", "working")] }),
     ws("w2", { directory: "/r/app", agents: [agent("a2", "idle")] }),
   ]);
-  assert.deepEqual(k, ["r:app", "t:/r/app", "a:w1:a1", "a:w2:a2"]);
+  assert.deepEqual(k, ["g:/r/app", "a:w1:a1", "a:w2:a2"]);
 });
 
-test("agent in a subfolder of a workspace directory belongs to that worktree", () => {
+test("an agent in a subfolder belongs to the workspace folder's group", () => {
   const k = keys([ws("w1", {
-    directory: "/r/app",
-    agents: [agent("a1", "working", { directory: "/r/app/packages/api" })],
+    directory: "/r/app", agents: [agent("a1", "working", { directory: "/r/app/packages/api" })],
   })]);
-  assert.deepEqual(k, ["r:app", "t:/r/app", "a:w1:a1"]);
+  assert.deepEqual(k, ["g:/r/app", "a:w1:a1"]);
 });
 
-test("agent branch comes from its hosting tab via panelId", () => {
+test("a trailing slash does not split one folder into two groups", () => {
+  const k = keys([ws("w1", { directory: "/r/app/", agents: [agent("a1", "working", { directory: "/r/app" })] })]);
+  assert.deepEqual(k, ["g:/r/app", "a:w1:a1"]);
+});
+
+test("an empty agent folder falls back to its workspace folder", () => {
+  const k = keys([ws("w1", { directory: "/r/app", agents: [agent("a1", "working", { directory: "" })] })]);
+  assert.deepEqual(k, ["g:/r/app", "a:w1:a1"]);
+});
+
+test("a workspace at / next to a folderless workspace does not throw", () => {
+  const w = [ws("w2", { title: "scratch" }), ws("w1", { directory: "/" })];
+  assert.doesNotThrow(() => rows(w));
+  assert.equal(group(rows(w), "g:/").label, "/");
+});
+
+test("an agent's tab branch labels a group the workspace doesn't own", () => {
   const r = rows([ws("w1", {
     directory: "/r/app", branch: "main",
-    tabs: [{ id: "p1", branch: "feat/y", dirty: true }],
+    tabs: [{ id: "p1", title: "x", branch: "feat/y", dirty: true }],
     agents: [agent("a1", "working", { directory: "/r/app2", panelId: "p1" })],
   })]);
-  const wt = r.find((x) => x.key === "t:/r/app2");
-  assert.equal(wt.label, "feat/y");
-  assert.equal(wt.dirty, true);
+  assert.equal(group(r, "g:/r/app2").label, "app2 · feat/y");
+  assert.equal(group(r, "g:/r/app2").dirty, true);
 });
 
 test("ended agents hide 15 minutes after their last activity", () => {
@@ -109,18 +158,18 @@ test("ended agents hide 15 minutes after their last activity", () => {
       agent("new", "ended", { lastActivityAt: EPOCH - 60 }),
     ],
   })]);
-  assert.deepEqual(k, ["r:app", "t:/r/app", "a:w1:new"]);
+  assert.deepEqual(k, ["g:/r/app", "a:w1:new"]);
 });
 
-test("a repo with an agent waiting on you sorts before alphabetically earlier repos", () => {
+test("groups keep cmux's workspace order, not urgency", () => {
   const k = keys([
-    ws("w1", { directory: "/r/aaa", agents: [agent("a1", "idle")] }),
-    ws("w2", { directory: "/r/zzz", agents: [agent("a2", "needs_input")] }),
-  ]).filter((x) => x.startsWith("r:"));
-  assert.deepEqual(k, ["r:zzz", "r:aaa"]);
+    ws("w1", { directory: "/r/zzz", index: 0, agents: [agent("a1", "idle")] }),
+    ws("w2", { directory: "/r/aaa", index: 1, agents: [agent("a2", "needs_input")] }),
+  ]).filter((x) => x.startsWith("g:"));
+  assert.deepEqual(k, ["g:/r/zzz", "g:/r/aaa"]);
 });
 
-test("agents sort by status, then most recent activity", () => {
+test("agents in a group sort by status, then most recent activity", () => {
   const k = keys([ws("w1", {
     directory: "/r/app",
     agents: [
@@ -133,102 +182,46 @@ test("agents sort by status, then most recent activity", () => {
   assert.deepEqual(k, ["a:w1:ask", "a:w1:work-new", "a:w1:work-old", "a:w1:idle"]);
 });
 
-test("repo rows count working, waiting and total shown agents", () => {
+test("group rows count running, waiting and total agents", () => {
   const r = rows([ws("w1", {
-    directory: "/r/app",
-    agents: [agent("a", "working"), agent("b", "needs_input"), agent("c", "idle")],
+    directory: "/r/app", agents: [agent("a", "working"), agent("b", "needs_input"), agent("c", "idle")],
   })]);
-  assert.deepEqual(
-    { working: r[0].working, waiting: r[0].waiting, total: r[0].total },
-    { working: 1, waiting: 1, total: 3 },
-  );
+  assert.deepEqual({ working: r[0].working, waiting: r[0].waiting, total: r[0].total },
+    { working: 1, waiting: 1, total: 3 });
 });
 
-test("subagents follow their parent, running ones first", () => {
-  const k = keys([ws("w1", {
-    directory: "/r/app",
-    agents: [agent("a1", "working", {
-      children: [
-        { id: "done", running: false, startedEpoch: 1 },
-        { id: "run", running: true, startedEpoch: 5 },
-      ],
-    })],
-  })]);
-  assert.deepEqual(k.slice(2), ["a:w1:a1", "c:w1:a1:run", "c:w1:a1:done"]);
-});
-
-test("a workspace at / next to a folderless workspace renders with label /", () => {
-  const ws2 = [ws("w2", { title: "scratch" }), ws("w1", { directory: "/" })];
-  assert.doesNotThrow(() => rows(ws2));
-  assert.equal(rows(ws2).find((x) => x.key === "t:/").label, "/");
-});
-
-test("a trailing slash does not split one worktree into two rows", () => {
-  const k = keys([ws("w1", {
-    directory: "/r/app/", agents: [agent("a1", "working", { directory: "/r/app" })],
-  })]);
-  assert.deepEqual(k, ["r:app", "t:/r/app", "a:w1:a1"]);
-});
-
-test("an empty agent directory falls back to its workspace folder", () => {
-  const k = keys([ws("w1", { directory: "/r/app", agents: [agent("a1", "working", { directory: "" })] })]);
-  assert.deepEqual(k, ["r:app", "t:/r/app", "a:w1:a1"]);
-});
-
-test("statusMeta ignores inherited object keys", () => {
-  assert.equal(sb.statusMeta("constructor").rank, 9);
-});
-
-test("a worktree row selects the workspace that owns the folder", () => {
+test("a group row selects the workspace that owns the folder", () => {
   const r = rows([
     ws("w1", { directory: "/r/a", agents: [agent("a1", "working", { directory: "/r/b" })] }),
     ws("w2", { directory: "/r/b" }),
   ]);
-  assert.equal(r.find((x) => x.key === "t:/r/b").wsId, "w2");
+  assert.equal(group(r, "g:/r/b").wsId, "w2");
 });
 
-test("two workspaces on one folder: the worktree row targets the selected one", () => {
-  const r = rows([
-    ws("w1", { directory: "/r/app" }),
-    ws("w2", { directory: "/r/app", selected: true }),
-  ]);
-  assert.equal(r.find((x) => x.key === "t:/r/app").wsId, "w2");
+test("two workspaces on one folder: the group targets the selected one", () => {
+  const r = rows([ws("w1", { directory: "/r/app" }), ws("w2", { directory: "/r/app", selected: true })]);
+  assert.equal(group(r, "g:/r/app").wsId, "w2");
 });
 
-test("worktree rows say whether a branch is known", () => {
-  const r = rows([ws("w1", { directory: "/r/app", branch: "main" }), ws("w2", { directory: "/r/notes" })]);
-  assert.equal(r.find((x) => x.key === "t:/r/app").isGit, true);
-  assert.equal(r.find((x) => x.key === "t:/r/notes").isGit, false);
-});
-
-test("an agent's subtitle is its first prompt, else its tab title, else its folder", () => {
+test("agent rows carry their title, kind symbol and running subagent count", () => {
   const r = rows([ws("w1", {
     directory: "/r/app",
-    tabs: [{ id: "p1", title: "api server" }],
-    agents: [
-      agent("titled", "working", { title: "fix ingest", panelId: "p1" }),
-      agent("tabbed", "working", { panelId: "p1" }),
-      agent("bare", "working"),
-    ],
+    tabs: [{ id: "p1", title: "Fix ingest retry" }],
+    agents: [agent("a1", "working", {
+      panelId: "p1",
+      children: [{ id: "c1", running: true }, { id: "c2", running: true }, { id: "c3", running: false }],
+    })],
   })]);
-  const sub = (id) => r.find((x) => x.key === "a:w1:" + id).subtitle;
-  assert.equal(sub("titled"), "fix ingest");
-  assert.equal(sub("tabbed"), "api server");
-  assert.equal(sub("bare"), "app");
+  const a = group(r, "a:w1:a1");
+  assert.equal(a.title, "Fix ingest retry");
+  assert.equal(a.symbol, "✻");
+  assert.equal(a.subagents, 2);
 });
 
-test("subagents are capped per agent with a +N more row", () => {
-  const children = Array.from({ length: 8 }, (_, i) => ({ id: "c" + i, running: false, startedEpoch: i }));
-  const r = rows([ws("w1", { directory: "/r/app", agents: [agent("a1", "working", { children })] })]);
-  assert.equal(r.filter((x) => x.kind === "child").length, 5);
-  const more = r.find((x) => x.kind === "more");
-  assert.equal(more.text, "+3 more subagents");
-});
-
-test("the whole list is capped with a +N more row at the end", () => {
+test("the list is capped with a +N more row at the end", () => {
   const many = Array.from({ length: 300 }, (_, i) => ws("w" + i, { directory: "/r/repo" + i }));
   const r = rows(many);
   assert.equal(r.length, 200 + 1);
   assert.equal(r[r.length - 1].kind, "more");
-  assert.match(r[r.length - 1].text, /^\+\d+ more rows$/);
+  assert.equal(r[r.length - 1].text, "+100 more");
 });

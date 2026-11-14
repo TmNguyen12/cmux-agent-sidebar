@@ -85,7 +85,7 @@ test("the source names only allowed cmux verbs and no risky APIs", () => {
   }
 });
 
-test("render handles capped subagent and row lists", () => {
+test("render handles a capped row list and many subagents", () => {
   const children = Array.from({ length: 8 }, (_, i) => ({ id: "c" + i, running: true, startedEpoch: i }));
   const many = Array.from({ length: 300 }, (_, i) => ws("w" + i, { directory: "/r/repo" + i }));
   many[0].agents = [agent("a1", "working", { children })];
