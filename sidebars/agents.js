@@ -147,4 +147,162 @@ function buildRows(workspaces, epoch) {
   return out;
 }
 
-sidebar(() => VStack([]));
+// ── view ─────────────────────────────────────────────────────────────────────
+
+function fmtElapsed(secs) {
+  const s = Math.max(0, Math.floor(secs));
+  if (s < 60) return s + "s";
+  const m = Math.floor(s / 60);
+  if (m < 60) return m + "m " + String(s % 60).padStart(2, "0") + "s";
+  return Math.floor(m / 60) + "h " + String(m % 60).padStart(2, "0") + "m";
+}
+
+function fmtAgo(secs) {
+  const s = Math.max(0, Math.floor(secs));
+  if (s < 60) return s + "s";
+  const m = Math.floor(s / 60);
+  if (m < 60) return m + "m";
+  const h = Math.floor(m / 60);
+  if (h < 24) return h + "h";
+  return Math.floor(h / 24) + "d";
+}
+
+const epochNow = () => data.clock()?.epoch ?? 0;
+const live = (a) => a.status === "working" || a.status === "needs_input";
+
+// In-flight agents tick a live elapsed; settled ones show how long ago.
+function agentTime(a, epoch) {
+  if (live(a) && a.sinceEpoch) return fmtElapsed(epoch - a.sinceEpoch);
+  if (a.lastActivityAt) return fmtAgo(epoch - a.lastActivityAt) + " ago";
+  return "";
+}
+
+function focusAgent(row) {
+  cmux("workspace.select", { workspace_id: row.wsId });
+  if (row.agent.surfaceId) cmux("surface.focus", { surface_id: row.agent.surfaceId });
+}
+
+// Status bar on the left edge: coloured while the agent needs attention or is
+// running, invisible otherwise, so the eye lands on live rows first.
+function edgeBar(colorFn) {
+  return RoundedRectangle({ width: 3, height: 26, cornerRadius: 1.5 }).fill(colorFn);
+}
+
+const rows = computed(() => buildRows(data.workspaces() ?? [], epochNow()));
+
+const counts = computed(() => {
+  const c = { working: 0, waiting: 0 };
+  for (const r of rows()) {
+    if (r.kind !== "repo") continue;
+    c.working += r.working;
+    c.waiting += r.waiting;
+  }
+  return c;
+});
+
+function headerRow() {
+  return HStack({ spacing: 8 }, [
+    Text("Agents").font(14).weight("semibold").monospaced(),
+    Spacer(),
+    Text(() => (counts().waiting > 0 ? "❓ " + counts().waiting : ""))
+      .font(11).monospaced().color(STATUS.needs_input.color),
+    Text(() => (counts().working > 0 ? "⚡ " + counts().working : ""))
+      .font(11).monospaced().color(STATUS.working.color),
+    Text(() => data.clock()?.time ?? "").font(11).monospaced().color("tertiary"),
+  ]).paddingHorizontal(10);
+}
+
+function repoRow(row) {
+  return HStack({ spacing: 6 }, [
+    Text(() => row().repo.toUpperCase())
+      .font(10).weight("semibold").monospaced().color("secondary")
+      .lineLimit(1).truncation("tail"),
+    Spacer(),
+    Text(() => (row().waiting > 0 ? "❓" + row().waiting : ""))
+      .font(10).monospaced().color(STATUS.needs_input.color),
+    Text(() => (row().working > 0 ? "⚡" + row().working : ""))
+      .font(10).monospaced().color(STATUS.working.color),
+    Text(() => String(row().total)).font(10).monospaced().color("tertiary"),
+  ]).paddingHorizontal(10).paddingTop(10);
+}
+
+function worktreeRow(row) {
+  return HStack({ spacing: 6 }, [
+    edgeBar(() => (row().selected ? "accent" : "clear")),
+    Image("arrow.triangle.branch").font(10).color("tertiary"),
+    Text(() => row().label)
+      .font(12).monospaced().lineLimit(1).truncation("middle")
+      .color(() => (row().selected ? "primary" : "secondary")),
+    Text(() => (row().dirty ? "✱" : "")).font(11).color("#FFD60A"),
+    Spacer(),
+  ])
+    .paddingHorizontal(6).paddingVertical(2)
+    .cornerRadius(6)
+    .background(() => (row().selected ? "#7f7f7f24" : null))
+    .hoverBackground("#7f7f7f1c")
+    .cursor("pointer")
+    .frame({ maxWidth: "infinity" })
+    .onTap(() => cmux("workspace.select", { workspace_id: row().wsId }));
+}
+
+function agentRow(row) {
+  const a = () => row().agent;
+  return HStack({ spacing: 6 }, [
+    edgeBar(() => (live(a()) ? statusMeta(a().status).color : "clear")),
+    VStack({ spacing: 1 }, [
+      HStack({ spacing: 6 }, [
+        Text(() => statusMeta(a().status).glyph).font(11).color(() => statusMeta(a().status).color),
+        Text(() => a().kind ?? a().name).font(11).monospaced().color("secondary"),
+        Text(() => statusMeta(a().status).label).font(11).color(() => statusMeta(a().status).color),
+        Spacer(),
+        Text(() => agentTime(a(), epochNow())).font(10).monospaced().color("tertiary"),
+      ]),
+      Text(() => a().title ?? "")
+        .font(10).color("tertiary").lineLimit(1).truncation("tail"),
+    ]),
+  ])
+    .paddingLeading(16).paddingTrailing(6).paddingVertical(2)
+    .cornerRadius(6)
+    .hoverBackground("#7f7f7f1c")
+    .cursor("pointer")
+    .frame({ maxWidth: "infinity" })
+    .onTap(() => focusAgent(row()));
+}
+
+function childRow(row) {
+  const c = () => row().child;
+  return HStack({ spacing: 6 }, [
+    Text("└").font(10).monospaced().color("tertiary"),
+    Text(() => (c().running ? "⚡" : "✓")).font(10)
+      .color(() => (c().running ? STATUS.working.color : "tertiary")),
+    Text(() => c().label ?? "subagent")
+      .font(10).lineLimit(1).truncation("tail")
+      .color(() => (c().running ? "secondary" : "tertiary")),
+    Spacer(),
+    Text(() => {
+      const end = c().running ? epochNow() : (c().endedEpoch ?? epochNow());
+      return fmtElapsed(end - (c().startedEpoch ?? end));
+    }).font(10).monospaced().color("tertiary"),
+  ])
+    .paddingLeading(34).paddingTrailing(6).paddingVertical(1)
+    .cornerRadius(6)
+    .hoverBackground("#7f7f7f1c")
+    .frame({ maxWidth: "infinity" })
+    .onTap(() => focusAgent(row()));
+}
+
+const ROW_VIEWS = { repo: repoRow, worktree: worktreeRow, agent: agentRow, child: childRow };
+
+sidebar(() =>
+  VStack({ spacing: 4 }, [
+    headerRow(),
+    Divider(),
+    ForEach({ items: rows, key: (r) => r.key }, (r) => ROW_VIEWS[r().kind](r)),
+    Text(() => (rows().length === 0
+      ? "No workspaces yet. Agents started in cmux terminals show up here with live status."
+      : ""))
+      .font(11).color("tertiary").paddingHorizontal(10),
+    Spacer(),
+  ]).paddingHorizontal(6).paddingVertical(8),
+  { surface: "glass" },
+);
