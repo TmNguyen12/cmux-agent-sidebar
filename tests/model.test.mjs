@@ -156,3 +156,79 @@ test("subagents follow their parent, running ones first", () => {
   })]);
   assert.deepEqual(k.slice(2), ["a:w1:a1", "c:w1:a1:run", "c:w1:a1:done"]);
 });
+
+test("a workspace at / next to a folderless workspace renders with label /", () => {
+  const ws2 = [ws("w2", { title: "scratch" }), ws("w1", { directory: "/" })];
+  assert.doesNotThrow(() => rows(ws2));
+  assert.equal(rows(ws2).find((x) => x.key === "t:/").label, "/");
+});
+
+test("a trailing slash does not split one worktree into two rows", () => {
+  const k = keys([ws("w1", {
+    directory: "/r/app/", agents: [agent("a1", "working", { directory: "/r/app" })],
+  })]);
+  assert.deepEqual(k, ["r:app", "t:/r/app", "a:w1:a1"]);
+});
+
+test("an empty agent directory falls back to its workspace folder", () => {
+  const k = keys([ws("w1", { directory: "/r/app", agents: [agent("a1", "working", { directory: "" })] })]);
+  assert.deepEqual(k, ["r:app", "t:/r/app", "a:w1:a1"]);
+});
+
+test("statusMeta ignores inherited object keys", () => {
+  assert.equal(sb.statusMeta("constructor").rank, 9);
+});
+
+test("a worktree row selects the workspace that owns the folder", () => {
+  const r = rows([
+    ws("w1", { directory: "/r/a", agents: [agent("a1", "working", { directory: "/r/b" })] }),
+    ws("w2", { directory: "/r/b" }),
+  ]);
+  assert.equal(r.find((x) => x.key === "t:/r/b").wsId, "w2");
+});
+
+test("two workspaces on one folder: the worktree row targets the selected one", () => {
+  const r = rows([
+    ws("w1", { directory: "/r/app" }),
+    ws("w2", { directory: "/r/app", selected: true }),
+  ]);
+  assert.equal(r.find((x) => x.key === "t:/r/app").wsId, "w2");
+});
+
+test("worktree rows say whether a branch is known", () => {
+  const r = rows([ws("w1", { directory: "/r/app", branch: "main" }), ws("w2", { directory: "/r/notes" })]);
+  assert.equal(r.find((x) => x.key === "t:/r/app").isGit, true);
+  assert.equal(r.find((x) => x.key === "t:/r/notes").isGit, false);
+});
+
+test("an agent's subtitle is its first prompt, else its tab title, else its folder", () => {
+  const r = rows([ws("w1", {
+    directory: "/r/app",
+    tabs: [{ id: "p1", title: "api server" }],
+    agents: [
+      agent("titled", "working", { title: "fix ingest", panelId: "p1" }),
+      agent("tabbed", "working", { panelId: "p1" }),
+      agent("bare", "working"),
+    ],
+  })]);
+  const sub = (id) => r.find((x) => x.key === "a:w1:" + id).subtitle;
+  assert.equal(sub("titled"), "fix ingest");
+  assert.equal(sub("tabbed"), "api server");
+  assert.equal(sub("bare"), "app");
+});
+
+test("subagents are capped per agent with a +N more row", () => {
+  const children = Array.from({ length: 8 }, (_, i) => ({ id: "c" + i, running: false, startedEpoch: i }));
+  const r = rows([ws("w1", { directory: "/r/app", agents: [agent("a1", "working", { children })] })]);
+  assert.equal(r.filter((x) => x.kind === "child").length, 5);
+  const more = r.find((x) => x.kind === "more");
+  assert.equal(more.text, "+3 more subagents");
+});
+
+test("the whole list is capped with a +N more row at the end", () => {
+  const many = Array.from({ length: 300 }, (_, i) => ws("w" + i, { directory: "/r/repo" + i }));
+  const r = rows(many);
+  assert.equal(r.length, 200 + 1);
+  assert.equal(r[r.length - 1].kind, "more");
+  assert.match(r[r.length - 1].text, /^\+\d+ more rows$/);
+});

@@ -2,9 +2,11 @@
 // node:vm context with the cmux runtime globals stubbed. Top-level `function`
 // declarations become context properties, so tests call the model directly.
 //
-// The view stubs evaluate every zero-arg function they are handed (bindings
-// and tap handlers alike) and expand ForEach over its items, so a render runs
-// every row builder and binding once against the fixture data.
+// The view stubs evaluate every binding they are handed (functions, also inside
+// arrays and props objects) and expand ForEach over its items, so a render runs
+// every row builder and binding once against the fixture data. Tap handlers are
+// RECORDED, not run: `__taps` holds them, so tests can prove that load and
+// render make no cmux calls and then fire each tap on purpose.
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import vm from "node:vm";
@@ -22,18 +24,22 @@ const VIEWS = [
 
 export function loadSidebar({ workspaces = [], epoch = 0, time = "00:00:00" } = {}) {
   const cmuxCalls = [];
+  const taps = [];
+  const HANDLERS = new Set(["onTap", "onTapGesture", "contextMenu"]);
 
   const exercise = (args) => {
     for (const a of args) {
-      if (typeof a === "function" && a.length === 0) a();
-      if (Array.isArray(a)) exercise(a);
+      if (typeof a === "function") a();
+      else if (Array.isArray(a)) exercise(a);
+      else if (a && typeof a === "object") exercise(Object.values(a));
     }
   };
 
   const view = () => {
     const node = new Proxy({}, {
-      get: () => (...args) => {
-        exercise(args);
+      get: (_, prop) => (...args) => {
+        if (HANDLERS.has(prop)) taps.push(...args.filter((a) => typeof a === "function"));
+        else exercise(args);
         return node;
       },
     });
@@ -58,6 +64,7 @@ export function loadSidebar({ workspaces = [], epoch = 0, time = "00:00:00" } = 
       return view();
     },
     __cmuxCalls: cmuxCalls,
+    __taps: taps,
   };
   for (const name of VIEWS) {
     ctx[name] = (...args) => {
