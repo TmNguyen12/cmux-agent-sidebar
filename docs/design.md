@@ -83,10 +83,10 @@ One line: status mark, kind symbol, title, subagent count, time.
 
 | cmux `agent.status` | Mark | Color | Order in group |
 | --- | --- | --- | --- |
-| `needs_input` | ● | orange | 0 |
-| `working` | ● | blue | 1 |
-| `idle` | ● | green | 2 |
-| `ended` | ○ | gray; hidden 15 min after last activity | 3 |
+| `needs_input` | ● | Mocha Peach | 0 |
+| `working` | ● | Mocha Blue | 1 |
+| `idle` | ● | Mocha Green | 2 |
+| `ended` | ○ | Mocha Overlay0; hidden 15 min after last activity | 3 |
 
 Every status is a dot, told apart by color. This is a personal tool and the user chose color only.
 

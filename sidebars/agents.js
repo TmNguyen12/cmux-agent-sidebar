@@ -18,17 +18,18 @@ const ENDED_VISIBLE_SECS = 15 * 60;
 // discarded and the last good one stays up, which would freeze stale statuses.
 const MAX_ROWS = 200;
 
-// Every status is a dot; color alone tells them apart.
+// Every status is a dot; color alone tells them apart. Catppuccin Mocha:
+// Peach, Blue, Green, Overlay0.
 const STATUS = {
-  needs_input: { mark: "●", label: "waiting on you", color: "#FF9F0A", rank: 0 },
-  working: { mark: "●", label: "running", color: "#0A84FF", rank: 1 },
-  idle: { mark: "●", label: "done", color: "#30D158", rank: 2 },
-  ended: { mark: "○", label: "ended", color: "#8E8E93", rank: 3 },
+  needs_input: { mark: "●", label: "waiting on you", color: "#fab387", rank: 0 },
+  working: { mark: "●", label: "running", color: "#89b4fa", rank: 1 },
+  idle: { mark: "●", label: "done", color: "#a6e3a1", rank: 2 },
+  ended: { mark: "○", label: "ended", color: "#6c7086", rank: 3 },
 };
 
 function statusMeta(status) {
   if (Object.hasOwn(STATUS, status)) return STATUS[status];
-  return { mark: "○", label: String(status), color: "#8E8E93", rank: 9 };
+  return { mark: "○", label: String(status), color: "#6c7086", rank: 9 };
 }
 
 const KIND_SYMBOLS = { claude: "✻", codex: "◆" };
@@ -205,7 +206,7 @@ const MOCHA = {
   hoverFill: "#45475a80", // Surface1
   dirty: "#f9e2af", // Yellow
 };
-const CARD_RADIUS = 8;
+const CARD_RADIUS = 6;
 
 function fmtElapsed(secs) {
   const s = Math.max(0, Math.floor(secs));
