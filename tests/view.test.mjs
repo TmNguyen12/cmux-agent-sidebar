@@ -98,3 +98,17 @@ test("agentTime says ago for done agents and ticks elapsed for running ones", ()
   assert.equal(sb.agentTime({ status: "working", sinceEpoch: 880 }, 1000), "2m 00s");
   assert.equal(sb.agentTime({ status: "needs_input", sinceEpoch: 970 }, 1000), "30s");
 });
+
+test("toCards nests each group's agents under it and keeps the more row", () => {
+  const rows = [
+    { key: "g:/a", kind: "group" }, { key: "a:1", kind: "agent" }, { key: "a:2", kind: "agent" },
+    { key: "g:/b", kind: "group" },
+    { key: "m:rows", kind: "more" },
+  ];
+  const cards = JSON.parse(JSON.stringify(sb.toCards(rows)));
+  assert.deepEqual(cards.map((c) => [c.key, c.kind, (c.agents ?? []).map((a) => a.key)]), [
+    ["g:/a", "card", ["a:1", "a:2"]],
+    ["g:/b", "card", []],
+    ["m:rows", "more", []],
+  ]);
+});

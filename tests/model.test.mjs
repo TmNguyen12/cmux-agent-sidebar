@@ -261,3 +261,14 @@ test("a workspace with no folder shows its own shortcut", () => {
   const r = rows([ws("w1", { title: "scratch", index: 2 })]);
   assert.equal(group(r, "g:ws:w1").shortcut, "⌘3");
 });
+
+test("an agent row is focused when its tab is focused in the selected workspace", () => {
+  const tabs = [{ id: "p1", title: "x", focused: true }, { id: "p2", title: "y", focused: false }];
+  const r = rows([
+    ws("w1", { directory: "/r/a", selected: true, tabs, agents: [agent("a1", "working", { panelId: "p1" }), agent("a2", "idle", { panelId: "p2" })] }),
+    ws("w2", { directory: "/r/b", tabs, agents: [agent("b1", "working", { panelId: "p1" })] }),
+  ]);
+  assert.equal(group(r, "a:w1:a1").focused, true);
+  assert.equal(group(r, "a:w1:a2").focused, false);
+  assert.equal(group(r, "a:w2:b1").focused, false);
+});

@@ -137,7 +137,10 @@ function buildRows(workspaces, epoch) {
     for (const a of agents) {
       const tab = (w.tabs ?? []).find((t) => t.id === a.panelId);
       const dir = normPath(a.directory) ?? wsDir;
-      const entry = { wsId: w.id, agent: a, title: agentTitle(a, tab, dir) };
+      const entry = {
+        wsId: w.id, agent: a, title: agentTitle(a, tab, dir),
+        focused: w.selected === true && tab?.focused === true,
+      };
       if (!dir) {
         folderless(w, order).agents.push(entry);
         continue;
@@ -175,9 +178,9 @@ function buildRows(workspaces, epoch) {
       waiting: g.agents.filter((e) => e.agent.status === "needs_input").length,
       total: g.agents.length,
     });
-    for (const { wsId, agent, title } of g.agents) {
+    for (const { wsId, agent, title, focused } of g.agents) {
       out.push({
-        key: "a:" + wsId + ":" + agent.id, kind: "agent", wsId, agent, title,
+        key: "a:" + wsId + ":" + agent.id, kind: "agent", wsId, agent, title, focused,
         symbol: kindSymbol(agent.kind),
         subagents: (agent.children ?? []).filter((c) => c.running).length,
       });
@@ -262,9 +265,8 @@ function groupRow(row) {
     Text(() => (row().dirty ? "✱" : "")).font(10).color("#FFD60A").fixedSize(),
     Spacer(),
   ])
-    .paddingHorizontal(8).paddingVertical(3).paddingTop(6)
+    .paddingHorizontal(8).paddingVertical(3)
     .cornerRadius(6)
-    .background(() => (row().selected ? "#7f7f7f24" : null))
     .hoverBackground("#7f7f7f1c")
     .cursor("pointer")
     .frame({ maxWidth: "infinity" })
@@ -288,6 +290,7 @@ function agentRow(row) {
   ])
     .paddingLeading(18).paddingTrailing(8).paddingVertical(2)
     .cornerRadius(6)
+    .background(() => (row().focused ? "#7f7f7f2e" : null))
     .hoverBackground("#7f7f7f1c")
     .cursor("pointer")
     .frame({ maxWidth: "infinity" })
@@ -301,13 +304,43 @@ function moreRow(row) {
     .frame({ maxWidth: "infinity" });
 }
 
-const ROW_VIEWS = { group: groupRow, agent: agentRow, more: moreRow };
+// Fold the flat rows into one card per group, so the selected workspace's
+// group can be outlined as a whole. A trailing "more" row passes through.
+function toCards(flat) {
+  const cards = [];
+  for (const r of flat) {
+    if (r.kind === "group") cards.push({ key: r.key, kind: "card", group: r, agents: [] });
+    else if (r.kind === "agent" && cards.length) cards[cards.length - 1].agents.push(r);
+    else if (r.kind === "more") cards.push(r);
+  }
+  return cards;
+}
+
+const cards = computed(() => toCards(rows()));
+
+// The runtime has no shadow, so the selected card is raised with a lighter
+// fill and a hairline outline instead.
+function cardView(card) {
+  const selected = () => card().group.selected;
+  return VStack({ spacing: 1 }, [
+    groupRow(() => card().group),
+    ForEach({ items: () => card().agents, key: (r) => r.key }, agentRow),
+  ])
+    .padding(3)
+    .cornerRadius(10)
+    .background(() => (selected() ? "#7f7f7f1f" : null))
+    .borderColor(() => (selected() ? "#7f7f7f59" : "clear"))
+    .borderWidth(1)
+    .frame({ maxWidth: "infinity" });
+}
+
+const CARD_VIEWS = { card: cardView, more: moreRow };
 
 sidebar(() =>
-  VStack({ spacing: 1 }, [
+  VStack({ spacing: 4 }, [
     headerRow(),
     Divider(),
-    ForEach({ items: rows, key: (r) => r.key }, (r) => ROW_VIEWS[r().kind](r)),
+    ForEach({ items: cards, key: (c) => c.key }, (c) => CARD_VIEWS[c().kind](c)),
     Text(() => (rows().length === 0
       ? "No workspaces yet. Agents started in cmux terminals show up here."
       : ""))

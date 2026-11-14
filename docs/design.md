@@ -92,8 +92,11 @@ Every status is a dot, told apart by color. This is a personal tool and the user
 
 ### Look
 
-Header `Agents` with live running and waiting counts. Group rows show the label,
-a `✱` when dirty, and a selected highlight. At most 200 rows, then "+N more".
+Header `Agents` with live running and waiting counts. Each group and its agents
+form a card; the selected workspace's card is raised with a lighter fill, a
+hairline outline and rounded corners (the runtime has no shadow). Inside it, the
+agent whose terminal has focus gets a faint fill. Group rows show the key, label
+and a `✱` when dirty. At most 200 rows, then "+N more".
 
 ## Left to the builder
 
