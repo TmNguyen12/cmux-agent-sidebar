@@ -1,7 +1,7 @@
 # Security
 
 createdAt: 2026-11-13 23:55 EST
-lastUpdated: 2026-11-14 01:45 EST
+lastUpdated: 2026-11-14 03:30 EST
 
 This project exists partly for security reasons. It shows agent state in cmux without adding anything that runs on every agent turn. This page records what was considered and why the design is what it is.
 
@@ -69,19 +69,9 @@ The sidebar is one file, `sidebars/agents.js`, run by cmux's JavaScript sidebar 
 
 ## Known exposure
 
-- **Markdown in titles is unverified.** Branch names, folder names, tab titles and prompts go through cmux's `Text`. The cmux docs don't say whether `Text` renders Markdown. If it does, a prompt like `[x](https://example.com)` could show as a link you might click. Check it with the steps in [Verify by hand](#verify-by-hand).
+- **Titles render as plain text.** Branch names, folder names, tab titles and prompts go through cmux's `Text`. Checked by hand on cmux 0.65.2: a tab titled `**bold** [link](https://example.com)` showed literally, with no bold and no link.
 - **Prompts on screen.** An agent's title is its first prompt. It shows in the sidebar, so it is visible when you share your screen.
 - **cmux itself.** The wrapper and sidebar runtime are cmux's code, out of scope here. A bug in the runtime's sandbox would affect every custom sidebar.
-
-## Verify by hand
-
-1. In a cmux terminal, start `claude` and send this as the first prompt: `**bold** [link](https://example.com)`.
-2. Look at the agent's title in the sidebar. If the tab already has Claude's topic, rename the tab to the same text first: `! cmux rename-tab "**bold** [link](https://example.com)"`.
-
-| You see | Meaning |
-|---|---|
-| The literal text, with `**` and brackets | Plain text. Nothing to do. |
-| Bold text or a link | cmux renders Markdown. Don't click links in the sidebar, and open an issue here. |
 
 ## Development-time note
 
