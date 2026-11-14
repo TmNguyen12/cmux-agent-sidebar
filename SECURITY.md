@@ -1,7 +1,7 @@
 # Security
 
 createdAt: 2026-11-13 23:55 EST
-lastUpdated: 2026-11-14 00:40 EST
+lastUpdated: 2026-11-14 01:45 EST
 
 This project exists partly for security reasons. It shows agent state in cmux without adding anything that runs on every agent turn. This page records what was considered and why the design is what it is.
 
@@ -40,14 +40,14 @@ The sidebar is one file, `sidebars/agents.js`, run by cmux's JavaScript sidebar 
 
 - **Contained by cmux's JS runtime.** No filesystem, network, timers or child processes, and a watchdog stops runaway code. This is a JavaScript context inside the cmux app (in-process by default), not an OS sandbox.
 - **Receives** the full workspace object cmux passes to every sidebar, including prompts, last messages, transcript paths and PR links.
-- **Displays** workspace titles, folders, branches, dirty state, and each agent's kind, status, times, first prompt or tab title, and subagent labels.
+- **Displays** workspace titles, folders, branches, dirty state, and each agent's kind, status, times, tab title or first prompt, and running subagent count.
 - **Actions:** only `workspace.select` and `surface.focus`, and only from a click on a row. `tests/view.test.mjs` checks that:
   - loading and rendering make no cmux calls;
   - every click handler calls only those two commands;
   - the source names no other cmux command and no `openURL`, `clipboard`, `TextField`, `fetch` or `log`.
 - **Clicks are bound to IDs.** A row's click uses the workspace or terminal ID, never a title, branch or prompt, so odd text can't redirect a click.
 - **No text fields and no clipboard.** It can't capture keystrokes or swap your clipboard.
-- **Capped lists.** At most 200 rows and 5 subagents per agent. cmux drops a render that goes over its budget and keeps the last one, which would freeze stale statuses on screen.
+- **Capped lists.** At most 200 rows. cmux drops a render that goes over its budget and keeps the last one, which would freeze stale statuses on screen.
 
 ## What the installer does
 
@@ -69,14 +69,14 @@ The sidebar is one file, `sidebars/agents.js`, run by cmux's JavaScript sidebar 
 
 ## Known exposure
 
-- **Markdown in titles is unverified.** Branch names, folder names, prompts and subagent labels go through cmux's `Text`. The cmux docs don't say whether `Text` renders Markdown. If it does, a prompt like `[x](https://example.com)` could show as a link you might click. Check it with the steps in [Verify by hand](#verify-by-hand).
+- **Markdown in titles is unverified.** Branch names, folder names, tab titles and prompts go through cmux's `Text`. The cmux docs don't say whether `Text` renders Markdown. If it does, a prompt like `[x](https://example.com)` could show as a link you might click. Check it with the steps in [Verify by hand](#verify-by-hand).
 - **Prompts on screen.** An agent's title is its first prompt. It shows in the sidebar, so it is visible when you share your screen.
 - **cmux itself.** The wrapper and sidebar runtime are cmux's code, out of scope here. A bug in the runtime's sandbox would affect every custom sidebar.
 
 ## Verify by hand
 
 1. In a cmux terminal, start `claude` and send this as the first prompt: `**bold** [link](https://example.com)`.
-2. Look at the agent's second line in the sidebar.
+2. Look at the agent's title in the sidebar. If the tab already has Claude's topic, rename the tab to the same text first: `! cmux rename-tab "**bold** [link](https://example.com)"`.
 
 | You see | Meaning |
 |---|---|
