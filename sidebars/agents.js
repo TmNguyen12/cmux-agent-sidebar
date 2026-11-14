@@ -18,11 +18,11 @@ const ENDED_VISIBLE_SECS = 15 * 60;
 // discarded and the last good one stays up, which would freeze stale statuses.
 const MAX_ROWS = 200;
 
-// Done is green AND a check mark, so state never rests on color alone.
+// Every status is a dot; color alone tells them apart.
 const STATUS = {
   needs_input: { mark: "●", label: "waiting on you", color: "#FF9F0A", rank: 0 },
   working: { mark: "●", label: "running", color: "#0A84FF", rank: 1 },
-  idle: { mark: "✓", label: "done", color: "#30D158", rank: 2 },
+  idle: { mark: "●", label: "done", color: "#30D158", rank: 2 },
   ended: { mark: "○", label: "ended", color: "#8E8E93", rank: 3 },
 };
 

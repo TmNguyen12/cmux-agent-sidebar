@@ -18,8 +18,8 @@ test("statusMeta orders waiting, running, done, ended, then unknown", () => {
   );
 });
 
-test("statusMeta marks done with a green check", () => {
-  assert.equal(sb.statusMeta("idle").mark, "✓");
+test("statusMeta marks done with a green dot", () => {
+  assert.equal(sb.statusMeta("idle").mark, "●");
   assert.equal(sb.statusMeta("idle").color, "#30D158");
   assert.equal(sb.statusMeta("working").color, "#0A84FF");
   assert.equal(sb.statusMeta("needs_input").color, "#FF9F0A");

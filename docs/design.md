@@ -1,7 +1,7 @@
 # cmux-agent-sidebar design
 
 createdAt: 2026-11-13 23:05 EST
-lastUpdated: 2026-11-14 01:30 EST
+lastUpdated: 2026-11-14 02:10 EST
 
 ## Intent
 
@@ -70,7 +70,7 @@ Placement: the left pane (chosen) or a right-sidebar panel, which has a
 
 One line: status mark, kind symbol, title, subagent count, time.
 
-- **Kind symbol:** `✻` Claude, `◆` Codex, else the kind's first letter.
+- **Kind symbol:** `✻` Claude in its clay color, `◆` Codex in the text color, else the kind's first letter.
 - **Title:** the tab title (Claude Code's topic, or your rename); else the first
   prompt when the tab title is a path or the agent's name; else the folder.
 - **Subagents:** `↳N` when N subagents are running.
@@ -82,10 +82,10 @@ One line: status mark, kind symbol, title, subagent count, time.
 | --- | --- | --- | --- |
 | `needs_input` | ● | orange | 0 |
 | `working` | ● | blue | 1 |
-| `idle` | ✓ | green | 2 |
+| `idle` | ● | green | 2 |
 | `ended` | ○ | gray; hidden 15 min after last activity | 3 |
 
-Done uses green plus a ✓ shape, so state never depends on color alone.
+Every status is a dot, told apart by color. This is a personal tool and the user chose color only.
 
 ### Look
 

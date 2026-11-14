@@ -8,14 +8,14 @@ A [cmux](https://github.com/manaflow-ai/cmux) custom sidebar that shows where ea
 Agents                        ● 1  ● 1
 ⑂ bluebird / feat/waitlist-export ✱
    ● ◆ Export waitlist as CSV       1m 12s
-   ✓ ✻ Fix ingest retry               12m
+   ● ✻ Fix ingest retry               12m
 ⑂ dotfiles · master
    ● ✻ Organizing home folder  ↳2   4m 05s
 ▢ Repos
 ```
 
 - One line per agent: status mark, agent (`✻` Claude, `◆` Codex), title, time.
-- Status: blue ● running, orange ● waiting on you, green ✓ done, gray ○ ended.
+- Status dots: blue running, orange waiting on you, green done, gray ○ ended.
 - Click a group to switch to its workspace. Click an agent to jump to its terminal.
 - No hooks, background jobs or network access. See [SECURITY.md](SECURITY.md).
 
@@ -61,7 +61,7 @@ Or open it as a pane next to your terminals: `cmux sidebar open agents`.
 Start `claude` or `codex` in any cmux workspace and send a prompt.
 
 - The agent shows a blue **●** under its folder's group.
-- When it finishes, it changes to a green **✓**.
+- When it finishes, the dot turns green.
 - A group with no agents only proves the workspace list works, not agent tracking.
 
 ## Update
