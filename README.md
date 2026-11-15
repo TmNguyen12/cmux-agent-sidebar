@@ -85,8 +85,74 @@ This sidebar groups best with one habit:
    ```sh
    cmux new-workspace --cwd ~/Repos/worktrees/<repo>/<branch>
    ```
-2. **Start `claude` or `codex` inside that folder.** An agent is grouped by the folder it was started in.
+2. **Start `claude` or `codex` inside that folder.** An agent is grouped by its tab's folder, which is where it started unless it [moves into a worktree](#follow-an-agent-into-a-worktree).
 3. **More agents for the same project go in tabs or splits** of that workspace.
+
+## Follow an agent into a worktree
+
+Optional. Do this if you start an agent in a repo and it creates a worktree as you talk to it.
+
+cmux learns a tab's folder from the shell prompt (the OSC 7 escape code). A running agent prints no prompt, so cmux keeps the folder the agent started in. These two steps make a Claude Code agent report its new folder.
+
+### What you need
+
+- Claude Code with a `statusLine` command in `~/.claude/settings.json`. If you have none, see [Claude Code's status line docs](https://code.claude.com/docs/en/statusline).
+- `jq` on your PATH.
+
+### 1. Have Claude switch into the worktree
+
+Claude Code's `EnterWorktree` tool moves the session into a worktree. Claude only uses it when you or a CLAUDE.md mentions worktrees.
+
+**Add to `~/.claude/CLAUDE.md`:**
+
+```md
+- After creating a git worktree for a task, switch the session into it with the EnterWorktree tool (pass the worktree as `path`). Don't work in it with `git -C` or absolute paths from the original folder.
+```
+
+- `EnterWorktree` with `path` enters a worktree you made with `git worktree add`, wherever it lives.
+- `EnterWorktree` with `name` creates a new worktree under `.claude/worktrees/` in the repo.
+- Running `cd` or `git -C` doesn't count. The session's folder stays where it was.
+
+### 2. Report the folder from your status line
+
+Claude Code reruns the status line often and passes it the session's current folder. This block sends that folder to the tab.
+
+**Add to your status line script, after it reads its input into `$input`:**
+
+```sh
+# report the session folder to the terminal (OSC 7), so cmux follows a
+# session into a worktree; the shell only reports it at a prompt. This script
+# has no controlling tty, so write to the nearest ancestor's terminal.
+cwd=$(echo "$input" | jq -r '.workspace.current_dir // .cwd // ""')
+if [ -n "$cwd" ]; then
+  pid=$PPID
+  for _ in 1 2 3 4; do
+    t=$(ps -o tty= -p "$pid" 2>/dev/null | tr -d ' ')
+    case "$t" in
+      ""|"??") pid=$(ps -o ppid= -p "$pid" 2>/dev/null | tr -d ' '); [ -n "$pid" ] || break ;;
+      *) { printf '\033]7;file://%s%s\033\\' "$(hostname)" "$cwd" > "/dev/$t"; } 2>/dev/null; break ;;
+    esac
+  done
+fi
+```
+
+- The status line runs with no terminal of its own, so `/dev/tty` doesn't work. The loop finds the Claude process's terminal instead.
+- This lives in your Claude Code config, not in this sidebar. It writes one escape code to the agent's own tab and nothing else.
+
+### 3. Check that it works
+
+In an agent's tab, ask Claude to enter an existing worktree.
+
+Expect, within a few seconds:
+
+- Claude's status line shows the worktree folder.
+- The agent moves to a `⑂ repo / branch` group in the sidebar.
+
+| Result | What to do |
+|---|---|
+| Status line still shows the old folder | Claude didn't use `EnterWorktree`. Ask it to, and check step 1. |
+| Status line shows the worktree, sidebar doesn't | The block isn't running. Check that `statusLine` points at the script you edited. Then run `cmux current --json \| grep '"cwd"'` and look for the worktree. |
+| A Codex agent stays in the old group | Expected. Start Codex inside the worktree instead. |
 
 ## How it groups
 
@@ -124,7 +190,7 @@ Status colors and ordering are in [docs/design.md](docs/design.md#status).
 
 ## Known limits
 
-- **Grouped by where the agent started.** An agent started in `~/Repos` stays under `Repos`, even if it edits a worktree. Knowing which files an agent edits would need hooks.
+- **Grouped by the tab's folder.** An agent started in `~/Repos` stays under `Repos`, even if it edits a worktree, until its session switches folders. Claude Code can [report the switch](#follow-an-agent-into-a-worktree). Codex can't, so start Codex in the worktree. Grouping by the files an agent edits would need hooks.
 - **Background subagents drop out of `↳N` early.** cmux marks a subagent finished when the call that started it returns. A subagent launched in the background keeps running after that.
 - **Tab keys assume no split panes.** cmux numbers tabs per pane, but the sidebar only sees a workspace's tabs as one list. In a workspace with splits, `⌃N` can point at the wrong tab.
 - **Two workspaces on one folder share a group.** Clicking the group opens the selected one, else the first. Their agents stay clickable.
