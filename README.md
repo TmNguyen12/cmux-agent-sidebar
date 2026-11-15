@@ -6,10 +6,10 @@ A [cmux](https://github.com/manaflow-ai/cmux) custom sidebar that shows where ea
 
 ```
 Agents                        ● 1  ● 1
-⑂ bluebird / feat/waitlist-export ✱
+⑂ bluebird / waitlist-export
    ● ◆ Export waitlist as CSV       1m 12s
    ● ✻ Fix ingest retry               12m
-⑂ dotfiles · master
+⑂ dotfiles · master ✱
    ● ✻ Organizing home folder  ↳2   4m 05s
 ▢ Repos
 ```
@@ -146,7 +146,7 @@ In an agent's tab, ask Claude to enter an existing worktree.
 Expect, within a few seconds:
 
 - Claude's status line shows the worktree folder.
-- The agent moves to a `⑂ repo / branch` group in the sidebar.
+- The agent moves to a `⑂ repo / worktree-folder` group in the sidebar.
 
 | Result | What to do |
 |---|---|
@@ -160,13 +160,14 @@ Each agent goes in the group for its folder, or for the workspace folder that co
 
 | Folder | Shown as |
 |---|---|
-| `…/worktrees/<repo>/<branch>` | ⑂ `repo / branch` |
+| `…/worktrees/<repo>/<folder>` | ⑂ `repo / folder` |
 | A git checkout | ⑂ `folder · branch` |
 | Any other folder | folder icon and name |
 | Workspace with no folder | folder icon and workspace name |
 
 - Groups keep cmux's workspace order.
-- `✱` means uncommitted changes.
+- `✱` means uncommitted changes. Worktree groups never show it.
+- A worktree is named by its folder, not its branch. Name worktree folders after their branch to see both. cmux only updates a tab's branch and `✱` at a shell prompt, so they'd be wrong after an agent [moves into a worktree](#follow-an-agent-into-a-worktree).
 - `⌃2` on an agent is its tab key: press the group's `⌘N`, then `⌃2`. It only shows when the workspace has more than one tab.
 - `⌘2` on a group is the key that selects its workspace. `in ⌘1` means the group is just an agent's folder inside workspace 1. To give it its own key, move that tab out: `cmux move-tab-to-new-workspace --surface <surface>`.
 

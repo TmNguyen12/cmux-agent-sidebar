@@ -56,12 +56,14 @@ function normPath(path) {
 }
 
 // A worktree (…/worktrees/<repo>/<rest>), else a git checkout (branch known),
-// else a plain folder.
+// else a plain folder. A worktree is named by its folder: cmux reports a tab's
+// branch only at a shell prompt, so an agent that moved into the worktree
+// still carries the branch of the folder it started in.
 function groupLabel(path, branch) {
   const parts = segments(path);
   const i = parts.lastIndexOf("worktrees");
   if (i >= 0 && i < parts.length - 2) {
-    return { groupKind: "worktree", label: parts[i + 1] + " / " + (branch ?? parts.slice(i + 2).join("/")) };
+    return { groupKind: "worktree", label: parts[i + 1] + " / " + parts.slice(i + 2).join("/") };
   }
   const name = parts.length ? parts[parts.length - 1] : path;
   if (branch !== undefined) return { groupKind: "repo", label: name + " · " + branch };
@@ -180,7 +182,8 @@ function buildRows(workspaces, epoch) {
       : (g.order < 9 ? "in ⌘" + (g.order + 1) : "");
     out.push({
       key: g.key, kind: "group", groupKind, label, shortcut,
-      dirty: g.dirty === true, wsId: g.wsId, selected: g.selected === true,
+      // The dirty flag goes stale the same way as the branch.
+      dirty: groupKind !== "worktree" && g.dirty === true, wsId: g.wsId, selected: g.selected === true,
       working: g.agents.filter((e) => e.agent.status === "working").length,
       waiting: g.agents.filter((e) => e.agent.status === "needs_input").length,
       total: g.agents.length,

@@ -54,11 +54,13 @@ Placement: the left pane (chosen) or a right-sidebar panel, which has a
   A folder inside a workspace's folder belongs to that workspace's group.
 - Branch and dirty state come from the agent's hosting tab
   (`agent.panelId` → `workspace.tabs[k].id`), else the workspace.
+- cmux updates a tab's branch and dirty state only at a shell prompt. An agent
+  that moves into a worktree keeps the old ones, so worktree groups ignore both.
 - Label, by the first rule that applies:
 
   | Folder | Label | Icon |
   | --- | --- | --- |
-  | `…/worktrees/<repo>/<rest>` | `<repo> / <branch or rest>` | branch |
+  | `…/worktrees/<repo>/<rest>` | `<repo> / <rest>`, no `✱` | branch |
   | Branch known | `<folder> · <branch>` | branch |
   | Otherwise | `<folder>` | folder |
   | Workspace with no folder | workspace title | folder |

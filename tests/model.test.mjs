@@ -36,12 +36,17 @@ test("kindSymbol is a star for Claude, a diamond for Codex, else a letter", () =
   assert.equal(sb.kindSymbol(undefined), "?");
 });
 
-test("groupLabel names a worktree by repo and branch", () => {
-  assert.deepEqual(host(sb.groupLabel("/r/worktrees/app/feat-x", "feat/x")),
-    { groupKind: "worktree", label: "app / feat/x" });
+test("groupLabel names a worktree by its folder, not a possibly stale branch", () => {
+  assert.deepEqual(host(sb.groupLabel("/r/worktrees/app/feat-x", "main")),
+    { groupKind: "worktree", label: "app / feat-x" });
 });
 
-test("groupLabel falls back to the worktree folder when the branch is unknown", () => {
+test("groupLabel keeps a nested worktree folder", () => {
+  assert.deepEqual(host(sb.groupLabel("/r/worktrees/app/codex/setup", "main")),
+    { groupKind: "worktree", label: "app / codex/setup" });
+});
+
+test("groupLabel names a worktree when the branch is unknown", () => {
   assert.deepEqual(host(sb.groupLabel("/r/worktrees/app/feat-x", undefined)),
     { groupKind: "worktree", label: "app / feat-x" });
 });
@@ -95,7 +100,15 @@ test("an agent with no folder or tab lands in its workspace's group", () => {
   })]);
   assert.deepEqual(r.map((x) => x.key), ["g:/r/worktrees/app/main", "a:w1:a1"]);
   assert.equal(r[0].label, "app / main");
-  assert.equal(r[0].dirty, true);
+});
+
+test("a worktree group shows no dirty mark, since cmux's flag can be stale", () => {
+  const r = rows([ws("w1", {
+    directory: "/r/worktrees/app/feat", branch: "main", dirty: true,
+    agents: [agent("a1", "working")],
+  })]);
+  assert.equal(r[0].label, "app / feat");
+  assert.equal(r[0].dirty, false);
 });
 
 test("agents in one workspace but different worktrees get separate groups", () => {
