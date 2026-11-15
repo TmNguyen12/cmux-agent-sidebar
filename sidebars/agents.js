@@ -371,11 +371,12 @@ function agentRow(row) {
     .onTap(() => focusAgent(row()));
 }
 
-// A label over the repo's checkouts; each checkout row selects its workspace.
+// A section label over the repo's checkouts, with no icon, so it reads apart
+// from the checkout rows; each checkout row selects its workspace.
 function repoRow(card) {
   return HStack({ spacing: 5 }, [
-    Image("arrow.triangle.branch").font(10).color("tertiary"),
-    Text(() => card().label).font(12).weight("semibold").lineLimit(1).truncation("middle").color("secondary"),
+    Text(() => card().label.toUpperCase())
+      .font(10).weight("semibold").lineLimit(1).truncation("middle").color("tertiary"),
     Spacer(),
   ])
     .paddingHorizontal(11).paddingVertical(2)

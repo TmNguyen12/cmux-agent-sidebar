@@ -6,12 +6,12 @@ A [cmux](https://github.com/manaflow-ai/cmux) custom sidebar that shows where ea
 
 ```
 Agents                        ● 1  ● 1
-⑂ bluebird
+BLUEBIRD
   ⌘1 ⑂ main ✱
      ⌃1 ● ✻ Fix ingest retry           12m
   ⌘2 ⑂ waitlist-export
         ● ◆ Export waitlist as CSV   1m 12s
-⑂ dotfiles
+DOTFILES
   ⌘3 ⑂ master
         ● ✻ Organizing home  ↳2     4m 05s
 ⌘4 ▢ Repos
@@ -163,8 +163,8 @@ Each agent goes in the group for its folder, or for the workspace folder that co
 
 | Folder | Shown as |
 |---|---|
-| `<parent>/<repo>`, a git checkout | `branch`, under the `⑂ repo` header |
-| `<parent>/worktrees/<repo>/<folder>` | `folder`, under the same `⑂ repo` header |
+| `<parent>/<repo>`, a git checkout | `branch`, under the `REPO` header |
+| `<parent>/worktrees/<repo>/<folder>` | `folder`, under the same `REPO` header |
 | Any other folder | folder icon and name, no header |
 | Workspace with no folder | folder icon and workspace name, no header |
 
