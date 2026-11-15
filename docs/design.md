@@ -14,7 +14,7 @@ scripts, so it adds no new code to every agent turn.
 
 - Read only cmux's built-in sidebar data (`data.workspaces()`, `data.clock()`).
   The sidebar runtime has no filesystem, network, timers or child processes.
-- Groups per checkout or folder. Checkouts of one repo sit under a repo header.
+- Groups per checkout or folder, under a repo header or one Folders header.
 - One line per agent, telling two sessions of the same agent apart by title.
 - Narrow-friendly: rows truncate instead of forcing a minimum width.
 - Click a group to select its workspace; click an agent to focus its terminal.
@@ -57,23 +57,29 @@ Placement: the left pane (chosen) or a right-sidebar panel, which has a
 - cmux updates a tab's branch and dirty state only at a shell prompt. An agent
   that moves into a worktree keeps the old ones, so worktree groups ignore both.
 - Repo, by folder layout (`repoOf`), since the runtime can't run git:
-  `<parent>/worktrees/<repo>/<rest>` and `<parent>/<repo>` are one repo. A
+  `<parent>/worktrees/<repo>/<wt>` and `<parent>/<repo>` are one repo. A
   folder with a known branch is its own repo. A folder with no known branch
   joins a repo only as that repo's main checkout.
+- A worktree is `…/worktrees/<repo>/<wt>`, the first folder only
+  (`worktreeRoot`). Claude Code keeps an agent's `cd`, so its folder can be a
+  subfolder; trimming keeps it in its worktree's group. A worktree named with
+  a slash shows as its first folder.
 - Label, by the first rule that applies:
 
   | Folder | Label | Icon |
   | --- | --- | --- |
-  | `…/worktrees/<repo>/<rest>` | `<rest>` under the `<repo>` header, no `✱` | branch |
+  | `…/worktrees/<repo>/<wt>/…` | `<wt>` under the `<repo>` header, no `✱` | branch |
   | Branch known | `<branch>` under the `<folder>` header | branch |
   | Main checkout of a repo, branch unknown | `<folder>` under its header | folder |
-  | Otherwise | `<folder>`, no header | folder |
-  | Workspace with no folder | workspace title, no header | folder |
+  | Otherwise | `<folder>` under the `Folders` header | folder |
+  | Workspace with no folder | workspace title under the `Folders` header | folder |
 
 - A repo shows its header even with one checkout, so adding a worktree doesn't
-  reshape the list. The header has no tap; each checkout selects its workspace.
-- Repos and flat groups keep cmux's workspace order; a repo sits at its first
-  checkout. Within a repo the main checkout comes first, then folder order.
+  reshape the list. Headers have no tap; each row under one selects its
+  workspace. A thin divider sits between headers.
+- Repos keep cmux's workspace order; a repo sits at its first checkout. The
+  `Folders` header comes last. Within a repo the main checkout comes first,
+  then folder order.
   Within a workspace, groups sort by folder: cmux moves a workspace's folder
   to its focused tab, so ordering by which group owns the workspace folder
   would swap groups on every tab switch.

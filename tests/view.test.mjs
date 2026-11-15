@@ -108,6 +108,7 @@ test("toCards nests each group's agents under it and keeps the more row", () => 
   const cards = JSON.parse(JSON.stringify(sb.toCards(rows)));
   assert.deepEqual(cards.map((c) => [c.key, c.kind, (c.agents ?? []).map((a) => a.key)]), [
     ["g:/a", "card", ["a:1", "a:2"]],
+    ["d:g:/b", "divider", []],
     ["g:/b", "card", []],
     ["m:rows", "more", []],
   ]);
@@ -123,6 +124,21 @@ test("toCards keeps repo rows and gives nested groups their own card kind and ke
   assert.deepEqual(cards.map((c) => [c.key, c.kind, (c.agents ?? []).map((a) => a.key)]), [
     ["r:/r/app", "repo", []],
     ["n:g:/r/app", "nestedCard", ["a:1"]],
+    ["d:g:/docs", "divider", []],
     ["g:/docs", "card", []],
+  ]);
+});
+
+test("toCards puts a divider between top-level sections, not before the first or the more row", () => {
+  const rows = [
+    { key: "g:/a", kind: "group" },
+    { key: "r:/r/app", kind: "repo", label: "app" },
+    { key: "g:/r/app", kind: "group", nested: true },
+    { key: "g:/r/worktrees/app/x", kind: "group", nested: true },
+    { key: "m:rows", kind: "more" },
+  ];
+  const cards = JSON.parse(JSON.stringify(sb.toCards(rows)));
+  assert.deepEqual(cards.map((c) => c.key), [
+    "g:/a", "d:r:/r/app", "r:/r/app", "n:g:/r/app", "n:g:/r/worktrees/app/x", "m:rows",
   ]);
 });

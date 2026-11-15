@@ -38,9 +38,16 @@ test("groupLabel names a worktree by its folder, not a possibly stale branch", (
     { groupKind: "worktree", label: "app / feat-x" });
 });
 
-test("groupLabel keeps a nested worktree folder", () => {
-  assert.deepEqual(host(sb.groupLabel("/r/worktrees/app/codex/setup", "main")),
-    { groupKind: "worktree", label: "app / codex/setup" });
+test("groupLabel names a worktree by its first folder, so a subfolder doesn't rename it", () => {
+  assert.deepEqual(host(sb.groupLabel("/r/worktrees/app/feat/pkg/api", "main")),
+    { groupKind: "worktree", label: "app / feat" });
+});
+
+test("worktreeRoot trims a worktree subfolder and leaves other folders alone", () => {
+  assert.equal(sb.worktreeRoot("/r/worktrees/app/feat/pkg/api"), "/r/worktrees/app/feat");
+  assert.equal(sb.worktreeRoot("/r/worktrees/app/feat"), "/r/worktrees/app/feat");
+  assert.equal(sb.worktreeRoot("/r/app/pkg"), "/r/app/pkg");
+  assert.equal(sb.worktreeRoot(undefined), undefined);
 });
 
 test("groupLabel names a worktree when the branch is unknown", () => {
@@ -85,9 +92,9 @@ test("agentTitle falls back to the folder name", () => {
 
 test("a workspace with no folder is its own group, named by title", () => {
   const r = rows([ws("w1", { title: "scratch" })]);
-  assert.deepEqual(r.map((x) => x.key), ["g:ws:w1"]);
-  assert.equal(r[0].label, "scratch");
-  assert.equal(r[0].groupKind, "folder");
+  assert.deepEqual(r.map((x) => x.key), ["r:folders", "g:ws:w1"]);
+  assert.equal(r[1].label, "scratch");
+  assert.equal(r[1].groupKind, "folder");
 });
 
 test("an agent with no folder or tab lands in its workspace's group", () => {
@@ -110,8 +117,22 @@ test("a worktree group shows no dirty mark, since cmux's flag can be stale", () 
 
 test("repoOf finds the repo from the main checkout or a worktree folder", () => {
   assert.deepEqual(host(sb.repoOf("/r/app", "main")), { path: "/r/app", name: "app", checkout: "main", main: true });
-  assert.deepEqual(host(sb.repoOf("/r/worktrees/app/codex/setup", "main")),
-    { path: "/r/app", name: "app", checkout: "codex/setup", main: false });
+  assert.deepEqual(host(sb.repoOf("/r/worktrees/app/feat/pkg", "main")),
+    { path: "/r/app", name: "app", checkout: "feat", main: false });
+});
+
+test("an agent in a worktree subfolder joins its worktree's group", () => {
+  const r = rows([ws("w1", {
+    directory: "/r/app", branch: "main",
+    agents: [agent("a1", "working", { directory: "/r/worktrees/app/feat/ble-provisioner" })],
+  })]);
+  assert.deepEqual(r.map((x) => x.key), ["r:/r/app", "g:/r/app", "g:/r/worktrees/app/feat", "a:w1:a1"]);
+  assert.equal(group(r, "g:/r/worktrees/app/feat").label, "feat");
+});
+
+test("a workspace sitting in a worktree subfolder groups as the worktree", () => {
+  assert.deepEqual(keys([ws("w1", { directory: "/r/worktrees/app/feat/pkg" })]),
+    ["r:/r/app", "g:/r/worktrees/app/feat"]);
 });
 
 test("repoOf leaves a folder with no known branch alone", () => {
@@ -137,10 +158,18 @@ test("a lone git checkout still gets a repo row", () => {
     ["r:/Users/t/dotfiles", "g:/Users/t/dotfiles"]);
 });
 
-test("a plain folder stays a flat group", () => {
-  const r = rows([ws("w1", { directory: "/Users/t/Documents" })]);
-  assert.deepEqual(r.map((x) => x.key), ["g:/Users/t/Documents"]);
-  assert.equal(r[0].nested, false);
+test("plain folders and folderless workspaces sit under one Folders header after the repos", () => {
+  const r = rows([
+    ws("w1", { directory: "/Users/t/Documents", index: 0 }),
+    ws("w2", { directory: "/r/app", branch: "main", index: 1 }),
+    ws("w3", { title: "scratch", index: 2 }),
+  ]);
+  assert.deepEqual(r.map((x) => x.key),
+    ["r:/r/app", "g:/r/app", "r:folders", "g:/Users/t/Documents", "g:ws:w3"]);
+  assert.equal(group(r, "r:folders").label, "Folders");
+  assert.equal(group(r, "g:/Users/t/Documents").label, "Documents");
+  assert.equal(group(r, "g:/Users/t/Documents").nested, true);
+  assert.equal(group(r, "g:ws:w3").label, "scratch");
 });
 
 test("a main checkout with no known branch joins its worktrees' repo", () => {
@@ -186,24 +215,24 @@ test("two workspaces on one folder share one group", () => {
     ws("w1", { directory: "/r/app", agents: [agent("a1", "working")] }),
     ws("w2", { directory: "/r/app", agents: [agent("a2", "idle")] }),
   ]);
-  assert.deepEqual(k, ["g:/r/app", "a:w1:a1", "a:w2:a2"]);
+  assert.deepEqual(k, ["r:folders", "g:/r/app", "a:w1:a1", "a:w2:a2"]);
 });
 
 test("an agent in a subfolder belongs to the workspace folder's group", () => {
   const k = keys([ws("w1", {
     directory: "/r/app", agents: [agent("a1", "working", { directory: "/r/app/packages/api" })],
   })]);
-  assert.deepEqual(k, ["g:/r/app", "a:w1:a1"]);
+  assert.deepEqual(k, ["r:folders", "g:/r/app", "a:w1:a1"]);
 });
 
 test("a trailing slash does not split one folder into two groups", () => {
   const k = keys([ws("w1", { directory: "/r/app/", agents: [agent("a1", "working", { directory: "/r/app" })] })]);
-  assert.deepEqual(k, ["g:/r/app", "a:w1:a1"]);
+  assert.deepEqual(k, ["r:folders", "g:/r/app", "a:w1:a1"]);
 });
 
 test("an empty agent folder falls back to its workspace folder", () => {
   const k = keys([ws("w1", { directory: "/r/app", agents: [agent("a1", "working", { directory: "" })] })]);
-  assert.deepEqual(k, ["g:/r/app", "a:w1:a1"]);
+  assert.deepEqual(k, ["r:folders", "g:/r/app", "a:w1:a1"]);
 });
 
 test("a workspace at / next to a folderless workspace does not throw", () => {
@@ -230,7 +259,7 @@ test("ended agents hide 15 minutes after their last activity", () => {
       agent("new", "ended", { lastActivityAt: EPOCH - 60 }),
     ],
   })]);
-  assert.deepEqual(k, ["g:/r/app", "a:w1:new"]);
+  assert.deepEqual(k, ["r:folders", "g:/r/app", "a:w1:new"]);
 });
 
 test("groups keep cmux's workspace order, not urgency", () => {
@@ -275,7 +304,7 @@ test("group rows count running, waiting and total agents", () => {
   const r = rows([ws("w1", {
     directory: "/r/app", agents: [agent("a", "working"), agent("b", "needs_input"), agent("c", "idle")],
   })]);
-  assert.deepEqual({ working: r[0].working, waiting: r[0].waiting, total: r[0].total },
+  assert.deepEqual({ working: r[1].working, waiting: r[1].waiting, total: r[1].total },
     { working: 1, waiting: 1, total: 3 });
 });
 
@@ -312,7 +341,7 @@ test("the list is capped with a +N more row at the end", () => {
   const r = rows(many);
   assert.equal(r.length, 200 + 1);
   assert.equal(r[r.length - 1].kind, "more");
-  assert.equal(r[r.length - 1].text, "+100 more");
+  assert.equal(r[r.length - 1].text, "+101 more");
 });
 
 test("kindColor paints Claude in its clay color and Codex in the text color", () => {

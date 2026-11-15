@@ -11,10 +11,13 @@ BLUEBIRD
      ⌃1 ● ✻ Fix ingest retry           12m
   ⌘2 ⑂ waitlist-export
         ● ◆ Export waitlist as CSV   1m 12s
+────────────────────────────────────
 DOTFILES
   ⌘3 ⑂ master
         ● ✻ Organizing home  ↳2     4m 05s
-⌘4 ▢ Repos
+────────────────────────────────────
+FOLDERS
+  ⌘4 ▢ Repos
 ```
 
 - One line per agent: status mark, agent (`✻` Claude, `◆` Codex), title, time.
@@ -159,21 +162,23 @@ Expect, within a few seconds:
 
 ## How it groups
 
-Each agent goes in the group for its folder, or for the workspace folder that contains it. Groups from one repo sit under a repo header.
+Each agent goes in the group for its folder, or for the workspace folder that contains it. Groups sit under a repo header, or under `FOLDERS` if they aren't in a git repo. A thin divider separates each header.
 
 | Folder | Shown as |
 |---|---|
 | `<parent>/<repo>`, a git checkout | `branch`, under the `REPO` header |
-| `<parent>/worktrees/<repo>/<folder>` | `folder`, under the same `REPO` header |
-| Any other folder | folder icon and name, no header |
-| Workspace with no folder | folder icon and workspace name, no header |
+| `<parent>/worktrees/<repo>/<folder>/…` | `folder`, under the same `REPO` header |
+| Any other folder | folder icon and name, under `FOLDERS` |
+| Workspace with no folder | folder icon and workspace name, under `FOLDERS` |
 
 - The sidebar can't run git, so it finds the repo from that folder layout. A worktree kept somewhere else gets its own header.
+- A worktree is the first folder under `worktrees/<repo>/`. An agent that `cd`s into a subfolder stays in its worktree's group. A worktree named with a slash, like `worktrees/<repo>/codex/setup`, shows as `codex`.
 - A repo shows its header even with one checkout, so the layout doesn't jump when you add a worktree.
-- The repo header is only a label. Click a checkout row to switch to its workspace.
+- Headers are only labels. Click a row under one to switch to its workspace.
 - Rows don't move when you switch tabs or an agent changes status:
-  - Repos and groups follow cmux's workspace order. Within a repo, the main checkout comes first, then the others by folder name.
+  - Repos follow cmux's workspace order, and `FOLDERS` comes last. Within a repo, the main checkout comes first, then the others by folder name.
   - Agents follow tab order.
+  - cmux itself moves a workspace to the top when it gets a notification, which renumbers `⌘N` and reorders repos. To stop that, set `"app": { "reorderOnNotification": false }` in `~/.config/cmux/cmux.json` and run `cmux reload-config`.
 - `✱` means uncommitted changes. Worktree groups never show it.
 - A worktree is named by its folder, not its branch. Name worktree folders after their branch to see both. cmux only updates a tab's branch and `✱` at a shell prompt, so they'd be wrong after an agent [moves into a worktree](#follow-an-agent-into-a-worktree).
 - `⌃2` on an agent is its tab key: press the group's `⌘N`, then `⌃2`. It only shows when the workspace has more than one tab.

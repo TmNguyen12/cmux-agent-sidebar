@@ -63,7 +63,7 @@ function groupLabel(path, branch) {
   const parts = segments(path);
   const i = parts.lastIndexOf("worktrees");
   if (i >= 0 && i < parts.length - 2) {
-    return { groupKind: "worktree", label: parts[i + 1] + " / " + parts.slice(i + 2).join("/") };
+    return { groupKind: "worktree", label: parts[i + 1] + " / " + parts[i + 2] };
   }
   const name = parts.length ? parts[parts.length - 1] : path;
   if (branch !== undefined) return { groupKind: "repo", label: name + " · " + branch };
@@ -78,11 +78,21 @@ function repoOf(path, branch) {
   if (i >= 0 && i < parts.length - 2) {
     return {
       path: "/" + [...parts.slice(0, i), parts[i + 1]].join("/"),
-      name: parts[i + 1], checkout: parts.slice(i + 2).join("/"), main: false,
+      name: parts[i + 1], checkout: parts[i + 2], main: false,
     };
   }
   if (branch === undefined || parts.length === 0) return undefined;
   return { path: "/" + parts.join("/"), name: parts[parts.length - 1], checkout: branch, main: true };
+}
+
+// An agent that cds into a subfolder keeps that folder, so a worktree is
+// …/worktrees/<repo>/<first folder>. A worktree named with a slash
+// (worktrees/<repo>/codex/x) shows as its first folder.
+function worktreeRoot(path) {
+  const parts = segments(path);
+  const i = parts.lastIndexOf("worktrees");
+  if (i < 0 || i >= parts.length - 3) return path;
+  return "/" + parts.slice(0, i + 3).join("/");
 }
 
 // Claude Code names its terminal tab after the conversation, and a tab you
@@ -108,7 +118,7 @@ function buildRows(workspaces, epoch) {
   // Longest workspace folder first, so an agent in a subfolder lands in the
   // most specific workspace folder that contains it.
   const wsDirs = workspaces
-    .map((w) => normPath(w.directory))
+    .map((w) => worktreeRoot(normPath(w.directory)))
     .filter((d) => d)
     .sort((a, b) => b.length - a.length);
   const groupOf = (dir) =>
@@ -144,7 +154,7 @@ function buildRows(workspaces, epoch) {
 
   workspaces.forEach((w, position) => {
     const order = w.index ?? position;
-    const wsDir = normPath(w.directory);
+    const wsDir = worktreeRoot(normPath(w.directory));
     const agents = (w.agents ?? []).filter((a) => visible(a, epoch));
     if (wsDir) {
       ensure(wsDir, {
@@ -156,7 +166,7 @@ function buildRows(workspaces, epoch) {
       const tabs = w.tabs ?? [];
       const tabIndex = tabs.findIndex((t) => t.id === a.panelId);
       const tab = tabs[tabIndex];
-      const dir = normPath(a.directory) ?? wsDir;
+      const dir = worktreeRoot(normPath(a.directory)) ?? wsDir;
       const entry = {
         wsId: w.id, agent: a, title: agentTitle(a, tab, dir), order, tabIndex,
         focused: w.selected === true && tab?.focused === true,
@@ -204,7 +214,7 @@ function buildRows(workspaces, epoch) {
   }
 
   const emitGroup = (g, checkout) => {
-    const nested = checkout !== undefined;
+    // Every group sits under a repo or the Folders header.
     const { groupKind, label } = g.path === undefined
       ? { groupKind: "folder", label: g.title || "untitled" }
       : groupLabel(g.path, g.branch);
@@ -216,7 +226,7 @@ function buildRows(workspaces, epoch) {
     const n = g.owner ? g.ownerOrder : g.order;
     const shortcut = n < 9 ? "⌘" + (n + 1) : "";
     out.push({
-      key: g.key, kind: "group", groupKind, label: nested ? checkout : label, shortcut, nested,
+      key: g.key, kind: "group", groupKind, label: checkout ?? label, shortcut, nested: true,
       // The dirty flag goes stale the same way as the branch.
       dirty: groupKind !== "worktree" && g.dirty === true, wsId: g.wsId, selected: g.selected === true,
       working: g.agents.filter((e) => e.agent.status === "working").length,
@@ -232,11 +242,14 @@ function buildRows(workspaces, epoch) {
     }
   };
 
+  // Repos first, then plain folders and folderless workspaces under one
+  // Folders header, each in workspace order.
   const emittedRepos = new Set();
+  const folders = [];
   for (const g of ordered) {
     const r = repos.get(g);
     if (!r) {
-      emitGroup(g);
+      folders.push(g);
       continue;
     }
     if (emittedRepos.has(r.path)) continue;
@@ -246,6 +259,8 @@ function buildRows(workspaces, epoch) {
       .sort((a, b) => repos.get(b).main - repos.get(a).main);
     for (const h of checkouts) emitGroup(h, repos.get(h).checkout);
   }
+  if (folders.length) out.push({ key: "r:folders", kind: "repo", label: "Folders" });
+  for (const g of folders) emitGroup(g);
   if (out.length > MAX_ROWS) {
     return [...out.slice(0, MAX_ROWS), { key: "m:rows", kind: "more", text: "+" + (out.length - MAX_ROWS) + " more" }];
   }
@@ -394,7 +409,13 @@ function moreRow(row) {
 // group can be outlined as a whole. A trailing "more" row passes through.
 function toCards(flat) {
   const cards = [];
+  // A divider before each repo or flat group but the first, keyed by the
+  // section it opens so it keeps its identity across updates.
+  const divide = (key) => {
+    if (cards.length) cards.push({ key: "d:" + key, kind: "divider" });
+  };
   for (const r of flat) {
+    if (r.kind === "repo" || (r.kind === "group" && !r.nested)) divide(r.key);
     if (r.kind === "repo") cards.push({ key: r.key, kind: "repo", label: r.label });
     else if (r.kind === "group" && r.nested) cards.push({ key: "n:" + r.key, kind: "nestedCard", group: r, agents: [] });
     else if (r.kind === "group") cards.push({ key: r.key, kind: "card", group: r, agents: [] });
@@ -424,6 +445,7 @@ function cardView(card, indent = 0) {
 }
 
 const CARD_VIEWS = {
+  divider: () => Divider().paddingHorizontal(8),
   repo: repoRow,
   card: (c) => cardView(c),
   nestedCard: (c) => cardView(c, 12),
