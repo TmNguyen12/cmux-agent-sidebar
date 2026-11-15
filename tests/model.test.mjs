@@ -11,11 +11,8 @@ const rows = (workspaces, epoch = EPOCH) => host(sb.buildRows(workspaces, epoch)
 const keys = (workspaces, epoch) => rows(workspaces, epoch).map((r) => r.key);
 const group = (r, key) => r.find((x) => x.key === key);
 
-test("statusMeta orders waiting, running, done, ended, then unknown", () => {
-  assert.deepEqual(
-    ["needs_input", "working", "idle", "ended", "bogus"].map((s) => sb.statusMeta(s).rank),
-    [0, 1, 2, 3, 9],
-  );
+test("statusMeta shows an unknown status as a gray ring with its name", () => {
+  assert.deepEqual(host(sb.statusMeta("bogus")), { mark: "○", label: "bogus", color: "#6c7086" });
 });
 
 test("statusMeta marks done with a green dot", () => {
@@ -26,7 +23,7 @@ test("statusMeta marks done with a green dot", () => {
 });
 
 test("statusMeta ignores inherited object keys", () => {
-  assert.equal(sb.statusMeta("constructor").rank, 9);
+  assert.equal(sb.statusMeta("constructor").label, "constructor");
 });
 
 test("kindSymbol is a star for Claude, a diamond for Codex, else a letter", () => {
@@ -119,7 +116,17 @@ test("agents in one workspace but different worktrees get separate groups", () =
       agent("a2", "idle", { directory: "/r/worktrees/app/feat" }),
     ],
   })]);
-  assert.deepEqual(k, ["g:/r/worktrees/app/main", "a:w1:a1", "g:/r/worktrees/app/feat", "a:w1:a2"]);
+  assert.deepEqual(k, ["g:/r/worktrees/app/feat", "a:w1:a2", "g:/r/worktrees/app/main", "a:w1:a1"]);
+});
+
+test("groups in one workspace keep their order when tab focus moves the workspace folder", () => {
+  const agents = [
+    agent("a1", "working", { directory: "/r/worktrees/app/main" }),
+    agent("a2", "idle", { directory: "/r/worktrees/app/feat" }),
+  ];
+  const onMain = keys([ws("w1", { directory: "/r/worktrees/app/main", agents })]);
+  const onFeat = keys([ws("w1", { directory: "/r/worktrees/app/feat", agents })]);
+  assert.deepEqual(onMain, onFeat);
 });
 
 test("two workspaces on one folder share one group", () => {
@@ -182,17 +189,34 @@ test("groups keep cmux's workspace order, not urgency", () => {
   assert.deepEqual(k, ["g:/r/zzz", "g:/r/aaa"]);
 });
 
-test("agents in a group sort by status, then most recent activity", () => {
+test("agents in a group keep tab order, not status or activity", () => {
   const k = keys([ws("w1", {
     directory: "/r/app",
+    tabs: [{ id: "p1", title: "x" }, { id: "p2", title: "y" }, { id: "p3", title: "z" }],
     agents: [
-      agent("idle", "idle", { lastActivityAt: 999 }),
-      agent("work-old", "working", { lastActivityAt: 10 }),
-      agent("work-new", "working", { lastActivityAt: 500 }),
-      agent("ask", "needs_input"),
+      agent("ask", "needs_input", { panelId: "p3" }),
+      agent("work", "working", { panelId: "p1", lastActivityAt: 10 }),
+      agent("idle", "idle", { panelId: "p2", lastActivityAt: 999 }),
     ],
   })]).filter((x) => x.startsWith("a:"));
-  assert.deepEqual(k, ["a:w1:ask", "a:w1:work-new", "a:w1:work-old", "a:w1:idle"]);
+  assert.deepEqual(k, ["a:w1:work", "a:w1:idle", "a:w1:ask"]);
+});
+
+test("agents with no known tab come after the rest, by id", () => {
+  const k = keys([ws("w1", {
+    directory: "/r/app",
+    tabs: [{ id: "p1", title: "x" }],
+    agents: [agent("b", "working"), agent("a", "needs_input"), agent("t", "idle", { panelId: "p1" })],
+  })]).filter((x) => x.startsWith("a:"));
+  assert.deepEqual(k, ["a:w1:t", "a:w1:a", "a:w1:b"]);
+});
+
+test("agents from two workspaces on one folder keep workspace order", () => {
+  const k = keys([
+    ws("w1", { directory: "/r/app", index: 0, agents: [agent("z", "idle")] }),
+    ws("w2", { directory: "/r/app", index: 1, agents: [agent("a", "needs_input")] }),
+  ]).filter((x) => x.startsWith("a:"));
+  assert.deepEqual(k, ["a:w1:z", "a:w2:a"]);
 });
 
 test("group rows count running, waiting and total agents", () => {
@@ -255,9 +279,9 @@ test("a group owned by a workspace shows that workspace's shortcut", () => {
   assert.equal(group(r, "g:/r/b").shortcut, "⌘2");
 });
 
-test("a folder-only group points at the workspace hosting its agents", () => {
+test("a folder-only group shows the key of the workspace hosting its agents", () => {
   const r = rows([ws("w1", { directory: "/r/a", index: 0, agents: [agent("a1", "working", { directory: "/home" })] })]);
-  assert.equal(group(r, "g:/home").shortcut, "in ⌘1");
+  assert.equal(group(r, "g:/home").shortcut, "⌘1");
 });
 
 test("workspaces past the ninth get no shortcut", () => {

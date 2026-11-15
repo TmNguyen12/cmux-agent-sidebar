@@ -165,11 +165,13 @@ Each agent goes in the group for its folder, or for the workspace folder that co
 | Any other folder | folder icon and name |
 | Workspace with no folder | folder icon and workspace name |
 
-- Groups keep cmux's workspace order.
+- Rows don't move when you switch tabs or an agent changes status:
+  - Groups follow cmux's workspace order, then folder name.
+  - Agents follow tab order.
 - `✱` means uncommitted changes. Worktree groups never show it.
 - A worktree is named by its folder, not its branch. Name worktree folders after their branch to see both. cmux only updates a tab's branch and `✱` at a shell prompt, so they'd be wrong after an agent [moves into a worktree](#follow-an-agent-into-a-worktree).
 - `⌃2` on an agent is its tab key: press the group's `⌘N`, then `⌃2`. It only shows when the workspace has more than one tab.
-- `⌘2` on a group is the key that selects its workspace. `in ⌘1` means the group is just an agent's folder inside workspace 1. To give it its own key, move that tab out: `cmux move-tab-to-new-workspace --surface <surface>`.
+- `⌘2` on a group is the key that selects its workspace. Two groups can share a key when one workspace has agents in two folders. To give one its own key, move that tab out: `cmux move-tab-to-new-workspace --surface <surface>`.
 
 ## Rename an agent
 

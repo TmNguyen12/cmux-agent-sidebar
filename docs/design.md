@@ -65,10 +65,13 @@ Placement: the left pane (chosen) or a right-sidebar panel, which has a
   | Otherwise | `<folder>` | folder |
   | Workspace with no folder | workspace title | folder |
 
-- Groups keep cmux's workspace order, so positions stay stable.
-- Each group shows its workspace's ⌘1…⌘9 key. A group that is only an agent's
-  folder (the agent was started outside its workspace's folder) shows
-  `in ⌘N`, the key of the workspace hosting it.
+- Groups keep cmux's workspace order, then folder order within a workspace.
+  cmux moves a workspace's folder to its focused tab, so ordering by which
+  group owns the workspace folder would swap groups on every tab switch.
+- Each group shows its workspace's ⌘1…⌘9 key, including a group that is only
+  an agent's folder.
+- Agents in a group keep workspace order, then tab order, then id. Status
+  changes don't move rows; the dot and the header counts show status.
 
 ### Agent rows
 
@@ -86,12 +89,12 @@ One line: tab key, status mark, kind symbol, title, subagent count, time.
 
 ### Status
 
-| cmux `agent.status` | Mark | Color | Order in group |
-| --- | --- | --- | --- |
-| `needs_input` | ● | Mocha Peach | 0 |
-| `working` | ● | Mocha Blue | 1 |
-| `idle` | ● | Mocha Green | 2 |
-| `ended` | ○ | Mocha Overlay0; hidden 15 min after last activity | 3 |
+| cmux `agent.status` | Mark | Color |
+| --- | --- | --- |
+| `needs_input` | ● | Mocha Peach |
+| `working` | ● | Mocha Blue |
+| `idle` | ● | Mocha Green |
+| `ended` | ○ | Mocha Overlay0; hidden 15 min after last activity |
 
 Every status is a dot, told apart by color. This is a personal tool and the user chose color only.
 

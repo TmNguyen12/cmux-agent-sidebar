@@ -21,15 +21,15 @@ const MAX_ROWS = 200;
 // Every status is a dot; color alone tells them apart. Catppuccin Mocha:
 // Peach, Blue, Green, Overlay0.
 const STATUS = {
-  needs_input: { mark: "●", label: "waiting on you", color: "#fab387", rank: 0 },
-  working: { mark: "●", label: "running", color: "#89b4fa", rank: 1 },
-  idle: { mark: "●", label: "done", color: "#a6e3a1", rank: 2 },
-  ended: { mark: "○", label: "ended", color: "#6c7086", rank: 3 },
+  needs_input: { mark: "●", label: "waiting on you", color: "#fab387" },
+  working: { mark: "●", label: "running", color: "#89b4fa" },
+  idle: { mark: "●", label: "done", color: "#a6e3a1" },
+  ended: { mark: "○", label: "ended", color: "#6c7086" },
 };
 
 function statusMeta(status) {
   if (Object.hasOwn(STATUS, status)) return STATUS[status];
-  return { mark: "○", label: String(status), color: "#6c7086", rank: 9 };
+  return { mark: "○", label: String(status), color: "#6c7086" };
 }
 
 const KIND_SYMBOLS = { claude: "✻", codex: "◆" };
@@ -143,7 +143,7 @@ function buildRows(workspaces, epoch) {
       const tab = tabs[tabIndex];
       const dir = normPath(a.directory) ?? wsDir;
       const entry = {
-        wsId: w.id, agent: a, title: agentTitle(a, tab, dir),
+        wsId: w.id, agent: a, title: agentTitle(a, tab, dir), order, tabIndex,
         focused: w.selected === true && tab?.focused === true,
         // ⌃1…⌃9 pick a tab after ⌘N picks the workspace. The sidebar data has
         // no split panes, so this assumes the workspace has none. A lone tab
@@ -167,19 +167,22 @@ function buildRows(workspaces, epoch) {
   });
 
   const out = [];
-  const ordered = [...groups.values()].sort((a, b) => a.order - b.order);
+  // Rows keep their place as focus and status change: cmux moves a
+  // workspace's folder to its focused tab, so groups in one workspace sort by
+  // folder, and agents sort by tab, not by status.
+  const byKey = (a, b) => (a < b ? -1 : a > b ? 1 : 0);
+  const ordered = [...groups.values()].sort((a, b) => a.order - b.order || byKey(a.key, b.key));
   for (const g of ordered) {
     const { groupKind, label } = g.path === undefined
       ? { groupKind: "folder", label: g.title || "untitled" }
       : groupLabel(g.path, g.branch);
+    const tabOrder = (e) => (e.tabIndex < 0 ? Infinity : e.tabIndex);
     g.agents.sort((x, y) =>
-      (statusMeta(x.agent.status).rank - statusMeta(y.agent.status).rank)
-      || ((y.agent.lastActivityAt ?? 0) - (x.agent.lastActivityAt ?? 0)));
+      (x.order - y.order) || (tabOrder(x) - tabOrder(y)) || byKey(String(x.agent.id), String(y.agent.id)));
     // ⌘1…⌘9 select workspaces, so a group shows its workspace's key. A group
     // that is only an agent's folder shows the key of the workspace hosting it.
-    const shortcut = g.owner
-      ? (g.ownerOrder < 9 ? "⌘" + (g.ownerOrder + 1) : "")
-      : (g.order < 9 ? "in ⌘" + (g.order + 1) : "");
+    const n = g.owner ? g.ownerOrder : g.order;
+    const shortcut = n < 9 ? "⌘" + (n + 1) : "";
     out.push({
       key: g.key, kind: "group", groupKind, label, shortcut,
       // The dirty flag goes stale the same way as the branch.
