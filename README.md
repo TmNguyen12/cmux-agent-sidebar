@@ -6,12 +6,15 @@ A [cmux](https://github.com/manaflow-ai/cmux) custom sidebar that shows where ea
 
 ```
 Agents                        ● 1  ● 1
-⑂ bluebird / waitlist-export
-   ● ◆ Export waitlist as CSV       1m 12s
-   ● ✻ Fix ingest retry               12m
-⑂ dotfiles · master ✱
-   ● ✻ Organizing home folder  ↳2   4m 05s
-▢ Repos
+⑂ bluebird
+  ⌘1 ⑂ main ✱
+     ⌃1 ● ✻ Fix ingest retry           12m
+  ⌘2 ⑂ waitlist-export
+        ● ◆ Export waitlist as CSV   1m 12s
+⑂ dotfiles
+  ⌘3 ⑂ master
+        ● ✻ Organizing home  ↳2     4m 05s
+⌘4 ▢ Repos
 ```
 
 - One line per agent: status mark, agent (`✻` Claude, `◆` Codex), title, time.
@@ -146,7 +149,7 @@ In an agent's tab, ask Claude to enter an existing worktree.
 Expect, within a few seconds:
 
 - Claude's status line shows the worktree folder.
-- The agent moves to a `⑂ repo / worktree-folder` group in the sidebar.
+- The agent moves to the worktree's row under its repo in the sidebar.
 
 | Result | What to do |
 |---|---|
@@ -156,17 +159,20 @@ Expect, within a few seconds:
 
 ## How it groups
 
-Each agent goes in the group for its folder, or for the workspace folder that contains it. Group names:
+Each agent goes in the group for its folder, or for the workspace folder that contains it. Groups from one repo sit under a repo header.
 
 | Folder | Shown as |
 |---|---|
-| `…/worktrees/<repo>/<folder>` | ⑂ `repo / folder` |
-| A git checkout | ⑂ `folder · branch` |
-| Any other folder | folder icon and name |
-| Workspace with no folder | folder icon and workspace name |
+| `<parent>/<repo>`, a git checkout | `branch`, under the `⑂ repo` header |
+| `<parent>/worktrees/<repo>/<folder>` | `folder`, under the same `⑂ repo` header |
+| Any other folder | folder icon and name, no header |
+| Workspace with no folder | folder icon and workspace name, no header |
 
+- The sidebar can't run git, so it finds the repo from that folder layout. A worktree kept somewhere else gets its own header.
+- A repo shows its header even with one checkout, so the layout doesn't jump when you add a worktree.
+- The repo header is only a label. Click a checkout row to switch to its workspace.
 - Rows don't move when you switch tabs or an agent changes status:
-  - Groups follow cmux's workspace order, then folder name.
+  - Repos and groups follow cmux's workspace order. Within a repo, the main checkout comes first, then the others by folder name.
   - Agents follow tab order.
 - `✱` means uncommitted changes. Worktree groups never show it.
 - A worktree is named by its folder, not its branch. Name worktree folders after their branch to see both. cmux only updates a tab's branch and `✱` at a shell prompt, so they'd be wrong after an agent [moves into a worktree](#follow-an-agent-into-a-worktree).

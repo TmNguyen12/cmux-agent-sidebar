@@ -14,7 +14,7 @@ scripts, so it adds no new code to every agent turn.
 
 - Read only cmux's built-in sidebar data (`data.workspaces()`, `data.clock()`).
   The sidebar runtime has no filesystem, network, timers or child processes.
-- One level of groups: a worktree, else a git repo, else a plain folder.
+- Groups per checkout or folder. Checkouts of one repo sit under a repo header.
 - One line per agent, telling two sessions of the same agent apart by title.
 - Narrow-friendly: rows truncate instead of forcing a minimum width.
 - Click a group to select its workspace; click an agent to focus its terminal.
@@ -56,18 +56,27 @@ Placement: the left pane (chosen) or a right-sidebar panel, which has a
   (`agent.panelId` → `workspace.tabs[k].id`), else the workspace.
 - cmux updates a tab's branch and dirty state only at a shell prompt. An agent
   that moves into a worktree keeps the old ones, so worktree groups ignore both.
+- Repo, by folder layout (`repoOf`), since the runtime can't run git:
+  `<parent>/worktrees/<repo>/<rest>` and `<parent>/<repo>` are one repo. A
+  folder with a known branch is its own repo. A folder with no known branch
+  joins a repo only as that repo's main checkout.
 - Label, by the first rule that applies:
 
   | Folder | Label | Icon |
   | --- | --- | --- |
-  | `…/worktrees/<repo>/<rest>` | `<repo> / <rest>`, no `✱` | branch |
-  | Branch known | `<folder> · <branch>` | branch |
-  | Otherwise | `<folder>` | folder |
-  | Workspace with no folder | workspace title | folder |
+  | `…/worktrees/<repo>/<rest>` | `<rest>` under the `<repo>` header, no `✱` | branch |
+  | Branch known | `<branch>` under the `<folder>` header | branch |
+  | Main checkout of a repo, branch unknown | `<folder>` under its header | folder |
+  | Otherwise | `<folder>`, no header | folder |
+  | Workspace with no folder | workspace title, no header | folder |
 
-- Groups keep cmux's workspace order, then folder order within a workspace.
-  cmux moves a workspace's folder to its focused tab, so ordering by which
-  group owns the workspace folder would swap groups on every tab switch.
+- A repo shows its header even with one checkout, so adding a worktree doesn't
+  reshape the list. The header has no tap; each checkout selects its workspace.
+- Repos and flat groups keep cmux's workspace order; a repo sits at its first
+  checkout. Within a repo the main checkout comes first, then folder order.
+  Within a workspace, groups sort by folder: cmux moves a workspace's folder
+  to its focused tab, so ordering by which group owns the workspace folder
+  would swap groups on every tab switch.
 - Each group shows its workspace's ⌘1…⌘9 key, including a group that is only
   an agent's folder.
 - Agents in a group keep workspace order, then tab order, then id. Status

@@ -95,8 +95,8 @@ test("an agent with no folder or tab lands in its workspace's group", () => {
     directory: "/r/worktrees/app/main", branch: "main", dirty: true,
     agents: [agent("a1", "working")],
   })]);
-  assert.deepEqual(r.map((x) => x.key), ["g:/r/worktrees/app/main", "a:w1:a1"]);
-  assert.equal(r[0].label, "app / main");
+  assert.deepEqual(r.map((x) => x.key), ["r:/r/app", "g:/r/worktrees/app/main", "a:w1:a1"]);
+  assert.equal(group(r, "g:/r/worktrees/app/main").label, "main");
 });
 
 test("a worktree group shows no dirty mark, since cmux's flag can be stale", () => {
@@ -104,8 +104,60 @@ test("a worktree group shows no dirty mark, since cmux's flag can be stale", () 
     directory: "/r/worktrees/app/feat", branch: "main", dirty: true,
     agents: [agent("a1", "working")],
   })]);
-  assert.equal(r[0].label, "app / feat");
-  assert.equal(r[0].dirty, false);
+  assert.equal(group(r, "g:/r/worktrees/app/feat").label, "feat");
+  assert.equal(group(r, "g:/r/worktrees/app/feat").dirty, false);
+});
+
+test("repoOf finds the repo from the main checkout or a worktree folder", () => {
+  assert.deepEqual(host(sb.repoOf("/r/app", "main")), { path: "/r/app", name: "app", checkout: "main", main: true });
+  assert.deepEqual(host(sb.repoOf("/r/worktrees/app/codex/setup", "main")),
+    { path: "/r/app", name: "app", checkout: "codex/setup", main: false });
+});
+
+test("repoOf leaves a folder with no known branch alone", () => {
+  assert.equal(sb.repoOf("/Users/t/Documents", undefined), undefined);
+});
+
+test("a repo's checkouts sit under one repo row, main checkout first", () => {
+  const r = rows([ws("w1", {
+    directory: "/x/zrepo", branch: "main",
+    agents: [
+      agent("a1", "working", { directory: "/x/worktrees/zrepo/feat" }),
+      agent("a2", "idle", { directory: "/x/zrepo" }),
+    ],
+  })]);
+  assert.deepEqual(r.map((x) => x.key), ["r:/x/zrepo", "g:/x/zrepo", "a:w1:a2", "g:/x/worktrees/zrepo/feat", "a:w1:a1"]);
+  assert.deepEqual(r.map((x) => x.label).filter(Boolean), ["zrepo", "main", "feat"]);
+  assert.equal(r[0].kind, "repo");
+  assert.equal(group(r, "g:/x/zrepo").nested, true);
+});
+
+test("a lone git checkout still gets a repo row", () => {
+  assert.deepEqual(keys([ws("w1", { directory: "/Users/t/dotfiles", branch: "master" })]),
+    ["r:/Users/t/dotfiles", "g:/Users/t/dotfiles"]);
+});
+
+test("a plain folder stays a flat group", () => {
+  const r = rows([ws("w1", { directory: "/Users/t/Documents" })]);
+  assert.deepEqual(r.map((x) => x.key), ["g:/Users/t/Documents"]);
+  assert.equal(r[0].nested, false);
+});
+
+test("a main checkout with no known branch joins its worktrees' repo", () => {
+  const r = rows([ws("w1", {
+    directory: "/r/app", agents: [agent("a1", "working", { directory: "/r/worktrees/app/feat" })],
+  })]);
+  assert.deepEqual(r.map((x) => x.key), ["r:/r/app", "g:/r/app", "g:/r/worktrees/app/feat", "a:w1:a1"]);
+  assert.equal(group(r, "g:/r/app").label, "app");
+});
+
+test("a repo sits at its earliest workspace and keeps its checkouts together", () => {
+  const k = keys([
+    ws("w1", { directory: "/r/app", branch: "main", index: 0 }),
+    ws("w2", { directory: "/r/other", branch: "x", index: 1 }),
+    ws("w3", { directory: "/r/worktrees/app/feat", index: 2 }),
+  ]);
+  assert.deepEqual(k, ["r:/r/app", "g:/r/app", "g:/r/worktrees/app/feat", "r:/r/other", "g:/r/other"]);
 });
 
 test("agents in one workspace but different worktrees get separate groups", () => {
@@ -116,7 +168,7 @@ test("agents in one workspace but different worktrees get separate groups", () =
       agent("a2", "idle", { directory: "/r/worktrees/app/feat" }),
     ],
   })]);
-  assert.deepEqual(k, ["g:/r/worktrees/app/feat", "a:w1:a2", "g:/r/worktrees/app/main", "a:w1:a1"]);
+  assert.deepEqual(k, ["r:/r/app", "g:/r/worktrees/app/feat", "a:w1:a2", "g:/r/worktrees/app/main", "a:w1:a1"]);
 });
 
 test("groups in one workspace keep their order when tab focus moves the workspace folder", () => {
@@ -166,7 +218,7 @@ test("an agent's tab branch labels a group the workspace doesn't own", () => {
     tabs: [{ id: "p1", title: "x", branch: "feat/y", dirty: true }],
     agents: [agent("a1", "working", { directory: "/r/app2", panelId: "p1" })],
   })]);
-  assert.equal(group(r, "g:/r/app2").label, "app2 · feat/y");
+  assert.equal(group(r, "g:/r/app2").label, "feat/y");
   assert.equal(group(r, "g:/r/app2").dirty, true);
 });
 

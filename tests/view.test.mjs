@@ -112,3 +112,17 @@ test("toCards nests each group's agents under it and keeps the more row", () => 
     ["m:rows", "more", []],
   ]);
 });
+
+test("toCards keeps repo rows and gives nested groups their own card kind and key", () => {
+  const rows = [
+    { key: "r:/r/app", kind: "repo", label: "app" },
+    { key: "g:/r/app", kind: "group", nested: true }, { key: "a:1", kind: "agent" },
+    { key: "g:/docs", kind: "group", nested: false },
+  ];
+  const cards = JSON.parse(JSON.stringify(sb.toCards(rows)));
+  assert.deepEqual(cards.map((c) => [c.key, c.kind, (c.agents ?? []).map((a) => a.key)]), [
+    ["r:/r/app", "repo", []],
+    ["n:g:/r/app", "nestedCard", ["a:1"]],
+    ["g:/docs", "card", []],
+  ]);
+});

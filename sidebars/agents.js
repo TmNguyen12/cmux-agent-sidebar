@@ -70,6 +70,21 @@ function groupLabel(path, branch) {
   return { groupKind: "folder", label: name };
 }
 
+// The repo a checkout belongs to, from the folder layout: <parent>/<repo> and
+// <parent>/worktrees/<repo>/<rest> are one repo. The sidebar can't ask git.
+function repoOf(path, branch) {
+  const parts = segments(path);
+  const i = parts.lastIndexOf("worktrees");
+  if (i >= 0 && i < parts.length - 2) {
+    return {
+      path: "/" + [...parts.slice(0, i), parts[i + 1]].join("/"),
+      name: parts[i + 1], checkout: parts.slice(i + 2).join("/"), main: false,
+    };
+  }
+  if (branch === undefined || parts.length === 0) return undefined;
+  return { path: "/" + parts.join("/"), name: parts[parts.length - 1], checkout: branch, main: true };
+}
+
 // Claude Code names its terminal tab after the conversation, and a tab you
 // rename in cmux keeps your name, so the tab title tells sessions apart. A tab
 // still titled with a path or the agent's own name says nothing; use the first
@@ -172,7 +187,24 @@ function buildRows(workspaces, epoch) {
   // folder, and agents sort by tab, not by status.
   const byKey = (a, b) => (a < b ? -1 : a > b ? 1 : 0);
   const ordered = [...groups.values()].sort((a, b) => a.order - b.order || byKey(a.key, b.key));
+
+  // Checkouts of one repo sit under a repo row placed at the repo's first
+  // checkout, main checkout first. A folder with no known branch joins a repo
+  // only when it is that repo's main checkout.
+  const repos = new Map();
   for (const g of ordered) {
+    const r = g.path === undefined ? undefined : repoOf(g.path, g.branch);
+    if (r) repos.set(g, r);
+  }
+  const repoPaths = new Set([...repos.values()].map((r) => r.path));
+  for (const g of ordered) {
+    if (g.path === undefined || repos.has(g) || !repoPaths.has(g.path)) continue;
+    const name = segments(g.path).pop();
+    repos.set(g, { path: g.path, name, checkout: name, main: true });
+  }
+
+  const emitGroup = (g, checkout) => {
+    const nested = checkout !== undefined;
     const { groupKind, label } = g.path === undefined
       ? { groupKind: "folder", label: g.title || "untitled" }
       : groupLabel(g.path, g.branch);
@@ -184,7 +216,7 @@ function buildRows(workspaces, epoch) {
     const n = g.owner ? g.ownerOrder : g.order;
     const shortcut = n < 9 ? "⌘" + (n + 1) : "";
     out.push({
-      key: g.key, kind: "group", groupKind, label, shortcut,
+      key: g.key, kind: "group", groupKind, label: nested ? checkout : label, shortcut, nested,
       // The dirty flag goes stale the same way as the branch.
       dirty: groupKind !== "worktree" && g.dirty === true, wsId: g.wsId, selected: g.selected === true,
       working: g.agents.filter((e) => e.agent.status === "working").length,
@@ -198,6 +230,21 @@ function buildRows(workspaces, epoch) {
         subagents: (agent.children ?? []).filter((c) => c.running).length,
       });
     }
+  };
+
+  const emittedRepos = new Set();
+  for (const g of ordered) {
+    const r = repos.get(g);
+    if (!r) {
+      emitGroup(g);
+      continue;
+    }
+    if (emittedRepos.has(r.path)) continue;
+    emittedRepos.add(r.path);
+    out.push({ key: "r:" + r.path, kind: "repo", label: r.name });
+    const checkouts = ordered.filter((h) => repos.get(h)?.path === r.path)
+      .sort((a, b) => repos.get(b).main - repos.get(a).main);
+    for (const h of checkouts) emitGroup(h, repos.get(h).checkout);
   }
   if (out.length > MAX_ROWS) {
     return [...out.slice(0, MAX_ROWS), { key: "m:rows", kind: "more", text: "+" + (out.length - MAX_ROWS) + " more" }];
@@ -324,6 +371,17 @@ function agentRow(row) {
     .onTap(() => focusAgent(row()));
 }
 
+// A label over the repo's checkouts; each checkout row selects its workspace.
+function repoRow(card) {
+  return HStack({ spacing: 5 }, [
+    Image("arrow.triangle.branch").font(10).color("tertiary"),
+    Text(() => card().label).font(12).weight("semibold").lineLimit(1).truncation("middle").color("secondary"),
+    Spacer(),
+  ])
+    .paddingHorizontal(11).paddingVertical(2)
+    .frame({ maxWidth: "infinity" });
+}
+
 function moreRow(row) {
   return Text(() => row().text)
     .font(10).color("tertiary").lineLimit(1)
@@ -336,7 +394,9 @@ function moreRow(row) {
 function toCards(flat) {
   const cards = [];
   for (const r of flat) {
-    if (r.kind === "group") cards.push({ key: r.key, kind: "card", group: r, agents: [] });
+    if (r.kind === "repo") cards.push({ key: r.key, kind: "repo", label: r.label });
+    else if (r.kind === "group" && r.nested) cards.push({ key: "n:" + r.key, kind: "nestedCard", group: r, agents: [] });
+    else if (r.kind === "group") cards.push({ key: r.key, kind: "card", group: r, agents: [] });
     else if (r.kind === "agent" && cards.length) cards[cards.length - 1].agents.push(r);
     else if (r.kind === "more") cards.push(r);
   }
@@ -347,7 +407,7 @@ const cards = computed(() => toCards(rows()));
 
 // The runtime has no shadow, so the selected card is raised with a lighter
 // fill and a hairline outline instead.
-function cardView(card) {
+function cardView(card, indent = 0) {
   const selected = () => card().group.selected;
   return VStack({ spacing: 1 }, [
     groupRow(() => card().group),
@@ -358,10 +418,16 @@ function cardView(card) {
     .background(() => (selected() ? MOCHA.cardFill : null))
     .borderColor(() => (selected() ? MOCHA.cardOutline : "clear"))
     .borderWidth(1)
-    .frame({ maxWidth: "infinity" });
+    .frame({ maxWidth: "infinity" })
+    .paddingLeading(indent);
 }
 
-const CARD_VIEWS = { card: cardView, more: moreRow };
+const CARD_VIEWS = {
+  repo: repoRow,
+  card: (c) => cardView(c),
+  nestedCard: (c) => cardView(c, 12),
+  more: moreRow,
+};
 
 sidebar(() =>
   VStack({ spacing: 4 }, [
