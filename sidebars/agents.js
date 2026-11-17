@@ -55,6 +55,12 @@ function normPath(path) {
   return String(path).replace(/\/+$/, "") || "/";
 }
 
+// A checkout's subfolder reports the checkout's branch too. A _ or . folder
+// (_claude, .github) is taken to be one, never a repo of its own.
+function hiddenName(name) {
+  return /^[_.]/.test(name);
+}
+
 // A worktree (…/worktrees/<repo>/<rest>), else a git checkout (branch known),
 // else a plain folder. A worktree is named by its folder: cmux reports a tab's
 // branch only at a shell prompt, so an agent that moved into the worktree
@@ -66,7 +72,7 @@ function groupLabel(path, branch) {
     return { groupKind: "worktree", label: parts[i + 1] + " / " + parts[i + 2] };
   }
   const name = parts.length ? parts[parts.length - 1] : path;
-  if (branch !== undefined) return { groupKind: "repo", label: name + " · " + branch };
+  if (branch !== undefined && !hiddenName(name)) return { groupKind: "repo", label: name + " · " + branch };
   return { groupKind: "folder", label: name };
 }
 
@@ -81,7 +87,7 @@ function repoOf(path, branch) {
       name: parts[i + 1], checkout: parts[i + 2], main: false,
     };
   }
-  if (branch === undefined || parts.length === 0) return undefined;
+  if (branch === undefined || parts.length === 0 || hiddenName(parts[parts.length - 1])) return undefined;
   return { path: "/" + parts.join("/"), name: parts[parts.length - 1], checkout: branch, main: true };
 }
 
@@ -115,10 +121,23 @@ function visible(agent, epoch) {
 // folder, each followed by its agent rows. Keys encode the row kind, so a key's
 // template never changes kind across live updates.
 function buildRows(workspaces, epoch) {
+  // A workspace sitting in a checkout's subfolder reports the checkout's
+  // branch, so it would look like a repo of its own. Fold it into the
+  // outermost open checkout that holds it.
+  const checkouts = workspaces
+    .filter((w) => w.branch !== undefined)
+    .map((w) => worktreeRoot(normPath(w.directory)))
+    .filter((d) => d)
+    .sort((a, b) => a.length - b.length);
+  const wsRoot = (w) => {
+    const dir = worktreeRoot(normPath(w.directory));
+    return dir && (checkouts.find((c) => dir.startsWith(c + "/")) ?? dir);
+  };
+
   // Longest workspace folder first, so an agent in a subfolder lands in the
   // most specific workspace folder that contains it.
   const wsDirs = workspaces
-    .map((w) => worktreeRoot(normPath(w.directory)))
+    .map(wsRoot)
     .filter((d) => d)
     .sort((a, b) => b.length - a.length);
   const groupOf = (dir) =>
@@ -154,7 +173,7 @@ function buildRows(workspaces, epoch) {
 
   workspaces.forEach((w, position) => {
     const order = w.index ?? position;
-    const wsDir = worktreeRoot(normPath(w.directory));
+    const wsDir = wsRoot(w);
     const agents = (w.agents ?? []).filter((a) => visible(a, epoch));
     if (wsDir) {
       ensure(wsDir, {

@@ -135,6 +135,22 @@ test("a workspace sitting in a worktree subfolder groups as the worktree", () =>
     ["r:/r/app", "g:/r/worktrees/app/feat"]);
 });
 
+test("a workspace in a checkout subfolder joins the open checkout that holds it", () => {
+  const k = keys([
+    ws("w1", { directory: "/r/app", branch: "main", index: 0 }),
+    ws("w2", { directory: "/r/app/_claude/plans", branch: "main", index: 1, agents: [agent("a1", "working")] }),
+  ]);
+  assert.deepEqual(k, ["r:/r/app", "g:/r/app", "a:w2:a1"]);
+});
+
+test("a _ or . folder with a branch is a plain folder, not a repo", () => {
+  assert.equal(sb.repoOf("/r/app/_claude", "main"), undefined);
+  assert.equal(sb.repoOf("/r/app/.github", "main"), undefined);
+  assert.deepEqual(host(sb.groupLabel("/r/app/_claude", "main")), { groupKind: "folder", label: "_claude" });
+  assert.deepEqual(keys([ws("w1", { directory: "/r/app/_claude", branch: "main" })]),
+    ["r:folders", "g:/r/app/_claude"]);
+});
+
 test("repoOf leaves a folder with no known branch alone", () => {
   assert.equal(sb.repoOf("/Users/t/Documents", undefined), undefined);
 });
