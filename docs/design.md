@@ -60,6 +60,10 @@ Placement: the left pane (chosen) or a right-sidebar panel, which has a
   `<parent>/worktrees/<repo>/<wt>` and `<parent>/<repo>` are one repo. A
   folder with a known branch is its own repo. A folder with no known branch
   joins a repo only as that repo's main checkout.
+- A checkout's subfolder reports the checkout's branch, so a workspace sitting
+  in one joins the outermost open checkout that holds it. A `_` or `.` folder
+  is never a repo (`hiddenName`), so with no such checkout open it is a plain
+  folder. A real repo nested inside another open checkout folds into it too.
 - A worktree is `…/worktrees/<repo>/<wt>`, the first folder only
   (`worktreeRoot`). Claude Code keeps an agent's `cd`, so its folder can be a
   subfolder; trimming keeps it in its worktree's group. A worktree named with
