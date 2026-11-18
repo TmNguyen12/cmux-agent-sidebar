@@ -135,6 +135,103 @@ test("a workspace sitting in a worktree subfolder groups as the worktree", () =>
     ["r:/r/app", "g:/r/worktrees/app/feat"]);
 });
 
+test("a workspace in a checkout subfolder joins the open checkout that holds it", () => {
+  const k = keys([
+    ws("w1", { directory: "/r/app", branch: "main", index: 0 }),
+    ws("w2", { directory: "/r/app/_claude/plans", branch: "main", index: 1, agents: [agent("a1", "working")] }),
+  ]);
+  assert.deepEqual(k, ["r:/r/app", "g:/r/app", "a:w2:a1"]);
+});
+
+test("a folded subfolder workspace doesn't take the checkout's row from its workspace", () => {
+  const r = rows([
+    ws("w2", {
+      directory: "/r/app/_claude", branch: "main", dirty: true, index: 0,
+      agents: [agent("a1", "working"), agent("a2", "idle", { directory: "/r/app" })],
+    }),
+    ws("w1", { directory: "/r/app", branch: "main", dirty: false, index: 1 }),
+  ]);
+  const g = group(r, "g:/r/app");
+  assert.equal(g.wsId, "w1");
+  assert.equal(g.shortcut, "⌘2");
+  assert.equal(g.selected, false);
+  assert.equal(g.dirty, false);
+});
+
+test("a folded workspace listed first leaves the checkout's dirty state alone", () => {
+  const g = group(rows([
+    ws("w2", { directory: "/r/app/_claude", branch: "main", dirty: false, index: 0 }),
+    ws("w1", { directory: "/r/app", branch: "main", dirty: true, index: 1 }),
+  ]), "g:/r/app");
+  assert.equal(g.dirty, true);
+});
+
+test("a selected folded workspace takes the checkout's row but not its dirty state", () => {
+  const g = group(rows([
+    ws("w1", { directory: "/r/app", branch: "main", dirty: false, index: 0 }),
+    ws("w2", { directory: "/r/app/_claude", branch: "main", dirty: true, index: 1, selected: true }),
+  ]), "g:/r/app");
+  assert.equal(g.wsId, "w2");
+  assert.equal(g.shortcut, "⌘2");
+  assert.equal(g.selected, true);
+  assert.equal(g.dirty, false);
+});
+
+test("a worktree inside a checkout keeps its row even with the checkout's stale branch", () => {
+  assert.deepEqual(keys([
+    ws("w1", { directory: "/r/app", branch: "main", index: 0 }),
+    ws("w2", { directory: "/r/app/.claude/worktrees/feat", branch: "main", index: 1 }),
+  ]), ["r:/r/app", "g:/r/app", "r:/r/app/.claude/worktrees/feat", "g:/r/app/.claude/worktrees/feat"]);
+});
+
+test("a repo nested in a checkout on another branch keeps its own row", () => {
+  assert.deepEqual(keys([
+    ws("w1", { directory: "/r/app", branch: "main", index: 0 }),
+    ws("w2", { directory: "/r/app/vendor/lib", branch: "dev", index: 1 }),
+  ]), ["r:/r/app", "g:/r/app", "r:/r/app/vendor/lib", "g:/r/app/vendor/lib"]);
+});
+
+test("an agent in a _ folder with its tab's branch is a plain folder", () => {
+  const r = rows([ws("w1", {
+    directory: "/Users/t",
+    tabs: [{ id: "p1", title: "x", branch: "main" }],
+    agents: [agent("a1", "working", { directory: "/r/app/_claude", panelId: "p1" })],
+  })]);
+  assert.deepEqual(r.map((x) => x.key), ["r:folders", "g:/Users/t", "g:/r/app/_claude", "a:w1:a1"]);
+  assert.equal(group(r, "g:/r/app/_claude").label, "_claude");
+});
+
+test("a workspace folds only into the outermost open checkout on its branch", () => {
+  assert.deepEqual(keys([
+    ws("w1", { directory: "/r/a", branch: "main", index: 0 }),
+    ws("w2", { directory: "/r/a/b", branch: "main", index: 1 }),
+    ws("w3", { directory: "/r/a/b/c", branch: "main", index: 2 }),
+  ]), ["r:/r/a", "g:/r/a"]);
+  assert.deepEqual(keys([
+    ws("w1", { directory: "/r", branch: "main", index: 0 }),
+    ws("w2", { directory: "/r/app/.claude/worktrees/feat", branch: "feat", index: 1 }),
+  ]), ["r:/r", "g:/r", "r:/r/app/.claude/worktrees/feat", "g:/r/app/.claude/worktrees/feat"]);
+});
+
+test("a workspace doesn't fold into a folder with no branch or a sibling sharing a prefix", () => {
+  assert.deepEqual(keys([
+    ws("w1", { directory: "/r/app", index: 0 }),
+    ws("w2", { directory: "/r/app/sub", branch: "main", index: 1 }),
+  ]), ["r:/r/app/sub", "g:/r/app/sub", "r:folders", "g:/r/app"]);
+  assert.deepEqual(keys([
+    ws("w1", { directory: "/r/app", branch: "main", index: 0 }),
+    ws("w2", { directory: "/r/app2", branch: "main", index: 1 }),
+  ]), ["r:/r/app", "g:/r/app", "r:/r/app2", "g:/r/app2"]);
+});
+
+test("a _ or . folder with a branch is a plain folder, not a repo", () => {
+  assert.equal(sb.repoOf("/r/app/_claude", "main"), undefined);
+  assert.equal(sb.repoOf("/r/app/.github", "main"), undefined);
+  assert.deepEqual(host(sb.groupLabel("/r/app/_claude", "main")), { groupKind: "folder", label: "_claude" });
+  assert.deepEqual(keys([ws("w1", { directory: "/r/app/_claude", branch: "main" })]),
+    ["r:folders", "g:/r/app/_claude"]);
+});
+
 test("repoOf leaves a folder with no known branch alone", () => {
   assert.equal(sb.repoOf("/Users/t/Documents", undefined), undefined);
 });

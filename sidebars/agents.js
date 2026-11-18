@@ -55,6 +55,12 @@ function normPath(path) {
   return String(path).replace(/\/+$/, "") || "/";
 }
 
+// A checkout's subfolder reports the checkout's branch too. A _ or . folder
+// (_claude, .dotfiles) is assumed to be such a subfolder, never a repo of its own.
+function hiddenName(name) {
+  return /^[_.]/.test(name);
+}
+
 // A worktree (…/worktrees/<repo>/<rest>), else a git checkout (branch known),
 // else a plain folder. A worktree is named by its folder: cmux reports a tab's
 // branch only at a shell prompt, so an agent that moved into the worktree
@@ -66,7 +72,7 @@ function groupLabel(path, branch) {
     return { groupKind: "worktree", label: parts[i + 1] + " / " + parts[i + 2] };
   }
   const name = parts.length ? parts[parts.length - 1] : path;
-  if (branch !== undefined) return { groupKind: "repo", label: name + " · " + branch };
+  if (branch !== undefined && !hiddenName(name)) return { groupKind: "repo", label: name + " · " + branch };
   return { groupKind: "folder", label: name };
 }
 
@@ -81,7 +87,7 @@ function repoOf(path, branch) {
       name: parts[i + 1], checkout: parts[i + 2], main: false,
     };
   }
-  if (branch === undefined || parts.length === 0) return undefined;
+  if (branch === undefined || parts.length === 0 || hiddenName(parts[parts.length - 1])) return undefined;
   return { path: "/" + parts.join("/"), name: parts[parts.length - 1], checkout: branch, main: true };
 }
 
@@ -115,10 +121,27 @@ function visible(agent, epoch) {
 // folder, each followed by its agent rows. Keys encode the row kind, so a key's
 // template never changes kind across live updates.
 function buildRows(workspaces, epoch) {
+  // A workspace sitting in a checkout's subfolder reports the checkout's
+  // branch, so it would look like a repo of its own. Fold it into the
+  // outermost open checkout that holds it on the same branch. A worktree
+  // inside a checkout (.claude/worktrees/<wt>) never folds: its reported
+  // branch can be the checkout's, stale from before an agent moved in.
+  const checkouts = workspaces
+    .filter((w) => w.branch !== undefined)
+    .map((w) => ({ dir: worktreeRoot(normPath(w.directory)), branch: w.branch }))
+    .filter((c) => c.dir)
+    .sort((a, b) => a.dir.length - b.dir.length);
+  const wsRoot = (w) => {
+    const dir = worktreeRoot(normPath(w.directory));
+    const outer = dir && checkouts.find((c) => c.branch === w.branch && dir.startsWith(c.dir + "/")
+      && !segments(dir.slice(c.dir.length)).includes("worktrees"));
+    return outer ? outer.dir : dir;
+  };
+
   // Longest workspace folder first, so an agent in a subfolder lands in the
   // most specific workspace folder that contains it.
   const wsDirs = workspaces
-    .map((w) => worktreeRoot(normPath(w.directory)))
+    .map(wsRoot)
     .filter((d) => d)
     .sort((a, b) => b.length - a.length);
   const groupOf = (dir) =>
@@ -154,12 +177,17 @@ function buildRows(workspaces, epoch) {
 
   workspaces.forEach((w, position) => {
     const order = w.index ?? position;
-    const wsDir = worktreeRoot(normPath(w.directory));
+    const wsDir = wsRoot(w);
+    // A folded workspace takes its checkout's row only while selected, like a
+    // second workspace on that folder. Branch and dirty state stay the
+    // checkout's own workspace's.
+    const owns = wsDir === worktreeRoot(normPath(w.directory));
     const agents = (w.agents ?? []).filter((a) => visible(a, epoch));
     if (wsDir) {
       ensure(wsDir, {
-        key: "g:" + wsDir, path: wsDir, branch: w.branch, dirty: w.dirty,
-        wsId: w.id, owner: true, selected: w.selected, order,
+        key: "g:" + wsDir, path: wsDir,
+        branch: owns ? w.branch : undefined, dirty: owns ? w.dirty : undefined,
+        wsId: w.id, owner: owns || w.selected === true, selected: w.selected, order,
       });
     }
     for (const a of agents) {
@@ -180,7 +208,7 @@ function buildRows(workspaces, epoch) {
         continue;
       }
       const path = groupOf(dir);
-      const own = path === wsDir;
+      const own = owns && path === wsDir;
       ensure(path, {
         key: "g:" + path, path,
         branch: tab?.branch ?? (own ? w.branch : undefined),
