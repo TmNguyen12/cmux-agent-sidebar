@@ -56,7 +56,7 @@ function normPath(path) {
 }
 
 // A checkout's subfolder reports the checkout's branch too. A _ or . folder
-// (_claude, .github) is taken to be one, never a repo of its own.
+// (_claude, .github) is assumed to be such a subfolder, never a repo of its own.
 function hiddenName(name) {
   return /^[_.]/.test(name);
 }
@@ -123,15 +123,17 @@ function visible(agent, epoch) {
 function buildRows(workspaces, epoch) {
   // A workspace sitting in a checkout's subfolder reports the checkout's
   // branch, so it would look like a repo of its own. Fold it into the
-  // outermost open checkout that holds it.
+  // outermost open checkout that holds it on the same branch. Git won't check
+  // out one branch twice, so a worktree inside a checkout never matches.
   const checkouts = workspaces
     .filter((w) => w.branch !== undefined)
-    .map((w) => worktreeRoot(normPath(w.directory)))
-    .filter((d) => d)
-    .sort((a, b) => a.length - b.length);
+    .map((w) => ({ dir: worktreeRoot(normPath(w.directory)), branch: w.branch }))
+    .filter((c) => c.dir)
+    .sort((a, b) => a.dir.length - b.dir.length);
   const wsRoot = (w) => {
     const dir = worktreeRoot(normPath(w.directory));
-    return dir && (checkouts.find((c) => dir.startsWith(c + "/")) ?? dir);
+    const outer = dir && checkouts.find((c) => c.branch === w.branch && dir.startsWith(c.dir + "/"));
+    return outer ? outer.dir : dir;
   };
 
   // Longest workspace folder first, so an agent in a subfolder lands in the
@@ -174,11 +176,15 @@ function buildRows(workspaces, epoch) {
   workspaces.forEach((w, position) => {
     const order = w.index ?? position;
     const wsDir = wsRoot(w);
+    // A folded workspace joins its checkout's group the way an agent's folder
+    // does: the checkout's own workspace keeps the row, branch and dirty state.
+    const owns = wsDir === worktreeRoot(normPath(w.directory));
     const agents = (w.agents ?? []).filter((a) => visible(a, epoch));
     if (wsDir) {
       ensure(wsDir, {
-        key: "g:" + wsDir, path: wsDir, branch: w.branch, dirty: w.dirty,
-        wsId: w.id, owner: true, selected: w.selected, order,
+        key: "g:" + wsDir, path: wsDir,
+        branch: owns ? w.branch : undefined, dirty: owns ? w.dirty : undefined,
+        wsId: w.id, owner: owns, selected: owns && w.selected, order,
       });
     }
     for (const a of agents) {
@@ -199,7 +205,7 @@ function buildRows(workspaces, epoch) {
         continue;
       }
       const path = groupOf(dir);
-      const own = path === wsDir;
+      const own = owns && path === wsDir;
       ensure(path, {
         key: "g:" + path, path,
         branch: tab?.branch ?? (own ? w.branch : undefined),

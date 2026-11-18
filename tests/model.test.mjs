@@ -143,6 +143,41 @@ test("a workspace in a checkout subfolder joins the open checkout that holds it"
   assert.deepEqual(k, ["r:/r/app", "g:/r/app", "a:w2:a1"]);
 });
 
+test("a folded subfolder workspace doesn't take the checkout's row from its workspace", () => {
+  const r = rows([
+    ws("w2", { directory: "/r/app/_claude", branch: "main", dirty: true, index: 0, selected: true, agents: [agent("a1", "working")] }),
+    ws("w1", { directory: "/r/app", branch: "main", dirty: false, index: 1 }),
+  ]);
+  const g = group(r, "g:/r/app");
+  assert.equal(g.wsId, "w1");
+  assert.equal(g.shortcut, "⌘2");
+  assert.equal(g.selected, false);
+  assert.equal(g.dirty, false);
+});
+
+test("a workspace folds only into the outermost open checkout on its branch", () => {
+  assert.deepEqual(keys([
+    ws("w1", { directory: "/r/a", branch: "main", index: 0 }),
+    ws("w2", { directory: "/r/a/b", branch: "main", index: 1 }),
+    ws("w3", { directory: "/r/a/b/c", branch: "main", index: 2 }),
+  ]), ["r:/r/a", "g:/r/a"]);
+  assert.deepEqual(keys([
+    ws("w1", { directory: "/r", branch: "main", index: 0 }),
+    ws("w2", { directory: "/r/app/.claude/worktrees/feat", branch: "feat", index: 1 }),
+  ]), ["r:/r", "g:/r", "r:/r/app/.claude/worktrees/feat", "g:/r/app/.claude/worktrees/feat"]);
+});
+
+test("a workspace doesn't fold into a folder with no branch or a sibling sharing a prefix", () => {
+  assert.deepEqual(keys([
+    ws("w1", { directory: "/r/app", index: 0 }),
+    ws("w2", { directory: "/r/app/sub", branch: "main", index: 1 }),
+  ]), ["r:/r/app/sub", "g:/r/app/sub", "r:folders", "g:/r/app"]);
+  assert.deepEqual(keys([
+    ws("w1", { directory: "/r/app", branch: "main", index: 0 }),
+    ws("w2", { directory: "/r/app2", branch: "main", index: 1 }),
+  ]), ["r:/r/app", "g:/r/app", "r:/r/app2", "g:/r/app2"]);
+});
+
 test("a _ or . folder with a branch is a plain folder, not a repo", () => {
   assert.equal(sb.repoOf("/r/app/_claude", "main"), undefined);
   assert.equal(sb.repoOf("/r/app/.github", "main"), undefined);
