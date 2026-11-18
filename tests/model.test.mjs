@@ -158,6 +158,14 @@ test("a folded subfolder workspace doesn't take the checkout's row from its work
   assert.equal(g.dirty, false);
 });
 
+test("a folded workspace listed first leaves the checkout's dirty state alone", () => {
+  const g = group(rows([
+    ws("w2", { directory: "/r/app/_claude", branch: "main", dirty: false, index: 0 }),
+    ws("w1", { directory: "/r/app", branch: "main", dirty: true, index: 1 }),
+  ]), "g:/r/app");
+  assert.equal(g.dirty, true);
+});
+
 test("a selected folded workspace takes the checkout's row but not its dirty state", () => {
   const g = group(rows([
     ws("w1", { directory: "/r/app", branch: "main", dirty: false, index: 0 }),
