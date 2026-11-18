@@ -56,7 +56,7 @@ function normPath(path) {
 }
 
 // A checkout's subfolder reports the checkout's branch too. A _ or . folder
-// (_claude, .github) is assumed to be such a subfolder, never a repo of its own.
+// (_claude, .dotfiles) is assumed to be such a subfolder, never a repo of its own.
 function hiddenName(name) {
   return /^[_.]/.test(name);
 }
@@ -123,8 +123,9 @@ function visible(agent, epoch) {
 function buildRows(workspaces, epoch) {
   // A workspace sitting in a checkout's subfolder reports the checkout's
   // branch, so it would look like a repo of its own. Fold it into the
-  // outermost open checkout that holds it on the same branch. Git won't check
-  // out one branch twice, so a worktree inside a checkout never matches.
+  // outermost open checkout that holds it on the same branch. A worktree
+  // inside a checkout (.claude/worktrees/<wt>) never folds: its reported
+  // branch can be the checkout's, stale from before an agent moved in.
   const checkouts = workspaces
     .filter((w) => w.branch !== undefined)
     .map((w) => ({ dir: worktreeRoot(normPath(w.directory)), branch: w.branch }))
@@ -132,7 +133,8 @@ function buildRows(workspaces, epoch) {
     .sort((a, b) => a.dir.length - b.dir.length);
   const wsRoot = (w) => {
     const dir = worktreeRoot(normPath(w.directory));
-    const outer = dir && checkouts.find((c) => c.branch === w.branch && dir.startsWith(c.dir + "/"));
+    const outer = dir && checkouts.find((c) => c.branch === w.branch && dir.startsWith(c.dir + "/")
+      && !segments(dir.slice(c.dir.length)).includes("worktrees"));
     return outer ? outer.dir : dir;
   };
 
@@ -176,15 +178,16 @@ function buildRows(workspaces, epoch) {
   workspaces.forEach((w, position) => {
     const order = w.index ?? position;
     const wsDir = wsRoot(w);
-    // A folded workspace joins its checkout's group the way an agent's folder
-    // does: the checkout's own workspace keeps the row, branch and dirty state.
+    // A folded workspace takes its checkout's row only while selected, like a
+    // second workspace on that folder. Branch and dirty state stay the
+    // checkout's own workspace's.
     const owns = wsDir === worktreeRoot(normPath(w.directory));
     const agents = (w.agents ?? []).filter((a) => visible(a, epoch));
     if (wsDir) {
       ensure(wsDir, {
         key: "g:" + wsDir, path: wsDir,
         branch: owns ? w.branch : undefined, dirty: owns ? w.dirty : undefined,
-        wsId: w.id, owner: owns, selected: owns && w.selected, order,
+        wsId: w.id, owner: owns || w.selected === true, selected: w.selected, order,
       });
     }
     for (const a of agents) {

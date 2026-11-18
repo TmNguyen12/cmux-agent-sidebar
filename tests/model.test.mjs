@@ -145,7 +145,10 @@ test("a workspace in a checkout subfolder joins the open checkout that holds it"
 
 test("a folded subfolder workspace doesn't take the checkout's row from its workspace", () => {
   const r = rows([
-    ws("w2", { directory: "/r/app/_claude", branch: "main", dirty: true, index: 0, selected: true, agents: [agent("a1", "working")] }),
+    ws("w2", {
+      directory: "/r/app/_claude", branch: "main", dirty: true, index: 0,
+      agents: [agent("a1", "working"), agent("a2", "idle", { directory: "/r/app" })],
+    }),
     ws("w1", { directory: "/r/app", branch: "main", dirty: false, index: 1 }),
   ]);
   const g = group(r, "g:/r/app");
@@ -153,6 +156,41 @@ test("a folded subfolder workspace doesn't take the checkout's row from its work
   assert.equal(g.shortcut, "⌘2");
   assert.equal(g.selected, false);
   assert.equal(g.dirty, false);
+});
+
+test("a selected folded workspace takes the checkout's row but not its dirty state", () => {
+  const g = group(rows([
+    ws("w1", { directory: "/r/app", branch: "main", dirty: false, index: 0 }),
+    ws("w2", { directory: "/r/app/_claude", branch: "main", dirty: true, index: 1, selected: true }),
+  ]), "g:/r/app");
+  assert.equal(g.wsId, "w2");
+  assert.equal(g.shortcut, "⌘2");
+  assert.equal(g.selected, true);
+  assert.equal(g.dirty, false);
+});
+
+test("a worktree inside a checkout keeps its row even with the checkout's stale branch", () => {
+  assert.deepEqual(keys([
+    ws("w1", { directory: "/r/app", branch: "main", index: 0 }),
+    ws("w2", { directory: "/r/app/.claude/worktrees/feat", branch: "main", index: 1 }),
+  ]), ["r:/r/app", "g:/r/app", "r:/r/app/.claude/worktrees/feat", "g:/r/app/.claude/worktrees/feat"]);
+});
+
+test("a repo nested in a checkout on another branch keeps its own row", () => {
+  assert.deepEqual(keys([
+    ws("w1", { directory: "/r/app", branch: "main", index: 0 }),
+    ws("w2", { directory: "/r/app/vendor/lib", branch: "dev", index: 1 }),
+  ]), ["r:/r/app", "g:/r/app", "r:/r/app/vendor/lib", "g:/r/app/vendor/lib"]);
+});
+
+test("an agent in a _ folder with its tab's branch is a plain folder", () => {
+  const r = rows([ws("w1", {
+    directory: "/Users/t",
+    tabs: [{ id: "p1", title: "x", branch: "main" }],
+    agents: [agent("a1", "working", { directory: "/r/app/_claude", panelId: "p1" })],
+  })]);
+  assert.deepEqual(r.map((x) => x.key), ["r:folders", "g:/Users/t", "g:/r/app/_claude", "a:w1:a1"]);
+  assert.equal(group(r, "g:/r/app/_claude").label, "_claude");
 });
 
 test("a workspace folds only into the outermost open checkout on its branch", () => {
