@@ -58,18 +58,20 @@ Placement: the left pane (chosen) or a right-sidebar panel, which has a
   that moves into a worktree keeps the old ones, so worktree groups ignore both.
 - Repo, by folder layout (`repoOf`), since the runtime can't run git:
   `<parent>/worktrees/<repo>/<wt>` and `<parent>/<repo>` are one repo. A
-  folder with a known branch is its own repo, unless one of the next two rules
-  applies. A folder with no known branch joins a repo only as that repo's main
-  checkout.
+  folder with a known branch is its own repo, unless it folds into a checkout
+  or is named `_…` or `.…` (below). A folder with no known branch joins a repo
+  only as that repo's main checkout.
 - A checkout's subfolder reports the checkout's branch, so a workspace sitting
   in one joins the outermost open checkout that holds it on the same branch
   (`wsRoot`). It counts as a second workspace on the checkout's folder: it
-  takes the row and its ⌘ key only while selected. Branch and dirty state
-  always come from the checkout's own workspace.
+  takes the row and its ⌘ key only while selected. The workspace itself never
+  sets the row's branch or dirty state, but its agents' tabs can, as any
+  agent's tab can for its group. The cost: a separate repo nested inside an
+  open checkout on the same branch name folds in too, so a repo at `~` on
+  `main` absorbs every repo under it on `main`.
 - A worktree inside a checkout (`.claude/worktrees/<wt>`) never folds, since
   its reported branch can be the checkout's, stale from before an agent moved
-  in. A separate repo nested inside an open checkout on the same branch name
-  folds in too.
+  in.
 - A `_` or `.` folder (`hiddenName`) is never a repo, so with no checkout to
   join it is a plain folder. The cost: a real repo named that way, such as
   `~/.dotfiles`, also shows as a plain folder.
