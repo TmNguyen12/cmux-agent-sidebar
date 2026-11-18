@@ -63,10 +63,13 @@ Placement: the left pane (chosen) or a right-sidebar panel, which has a
   checkout.
 - A checkout's subfolder reports the checkout's branch, so a workspace sitting
   in one joins the outermost open checkout that holds it on the same branch
-  (`wsRoot`). It joins like an agent's folder: the checkout's own workspace
-  keeps the row, its ⌘ key, branch and dirty state. Git won't check out one
-  branch twice, so a worktree inside a checkout keeps its own row. A separate
-  repo nested inside an open checkout on the same branch name folds in too.
+  (`wsRoot`). It counts as a second workspace on the checkout's folder: it
+  takes the row and its ⌘ key only while selected. Branch and dirty state
+  always come from the checkout's own workspace.
+- A worktree inside a checkout (`.claude/worktrees/<wt>`) never folds, since
+  its reported branch can be the checkout's, stale from before an agent moved
+  in. A separate repo nested inside an open checkout on the same branch name
+  folds in too.
 - A `_` or `.` folder (`hiddenName`) is never a repo, so with no checkout to
   join it is a plain folder. The cost: a real repo named that way, such as
   `~/.dotfiles`, also shows as a plain folder.
