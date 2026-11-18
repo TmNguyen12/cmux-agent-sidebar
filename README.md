@@ -38,14 +38,15 @@ Each agent goes under its tab's folder. Checkouts of one git repo share a header
 
 | Folder | Shown as |
 |---|---|
-| `<parent>/<repo>` | `branch`, under `REPO` |
+| `<parent>/<repo>`, not named `_…` or `.…` | `branch`, under `REPO` |
 | `<parent>/worktrees/<repo>/<folder>/…` | `folder`, under `REPO` |
 | Any other folder | folder name, under `FOLDERS` |
 | Workspace with no folder | workspace name, under `FOLDERS` |
 
 - The sidebar can't run git, so it finds repos by that folder layout. A worktree kept elsewhere gets its own header.
 - A worktree is named by its first folder, not its branch, so name worktree folders after their branch. An agent in a subfolder stays in its worktree's group.
-- A workspace in a repo's subfolder joins that repo's checkout when a workspace is open on the checkout itself. A `_` or `.` folder (`_claude`, `.github`) never counts as a repo, so it goes under `FOLDERS` when that checkout isn't open.
+- A workspace in a repo's subfolder joins that checkout's row when another workspace is open on the checkout, on the same branch.
+- A `_` or `.` folder (`_claude`, `.dotfiles`) never counts as a repo, even a real one. With no checkout to join, it goes under `FOLDERS`.
 - `✱` means uncommitted changes. Worktree rows never show it: cmux only updates branch and `✱` at a shell prompt, so they go stale once an agent moves.
 - `⌘N` selects the row's workspace. `⌃N` on an agent is its tab, shown when the workspace has more than one.
 - Rows don't move when you switch tabs or an agent changes status. Repos follow workspace order, main checkout first; agents follow tab order.

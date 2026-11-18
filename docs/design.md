@@ -58,12 +58,18 @@ Placement: the left pane (chosen) or a right-sidebar panel, which has a
   that moves into a worktree keeps the old ones, so worktree groups ignore both.
 - Repo, by folder layout (`repoOf`), since the runtime can't run git:
   `<parent>/worktrees/<repo>/<wt>` and `<parent>/<repo>` are one repo. A
-  folder with a known branch is its own repo. A folder with no known branch
-  joins a repo only as that repo's main checkout.
+  folder with a known branch is its own repo, unless one of the next two rules
+  applies. A folder with no known branch joins a repo only as that repo's main
+  checkout.
 - A checkout's subfolder reports the checkout's branch, so a workspace sitting
-  in one joins the outermost open checkout that holds it. A `_` or `.` folder
-  is never a repo (`hiddenName`), so with no such checkout open it is a plain
-  folder. A real repo nested inside another open checkout folds into it too.
+  in one joins the outermost open checkout that holds it on the same branch
+  (`wsRoot`). It joins like an agent's folder: the checkout's own workspace
+  keeps the row, its ⌘ key, branch and dirty state. Git won't check out one
+  branch twice, so a worktree inside a checkout keeps its own row. A separate
+  repo nested inside an open checkout on the same branch name folds in too.
+- A `_` or `.` folder (`hiddenName`) is never a repo, so with no checkout to
+  join it is a plain folder. The cost: a real repo named that way, such as
+  `~/.dotfiles`, also shows as a plain folder.
 - A worktree is `…/worktrees/<repo>/<wt>`, the first folder only
   (`worktreeRoot`). Claude Code keeps an agent's `cd`, so its folder can be a
   subfolder; trimming keeps it in its worktree's group. A worktree named with
@@ -73,7 +79,7 @@ Placement: the left pane (chosen) or a right-sidebar panel, which has a
   | Folder | Label | Icon |
   | --- | --- | --- |
   | `…/worktrees/<repo>/<wt>/…` | `<wt>` under the `<repo>` header, no `✱` | branch |
-  | Branch known | `<branch>` under the `<folder>` header | branch |
+  | Branch known, not named `_…` or `.…` | `<branch>` under the `<folder>` header | branch |
   | Main checkout of a repo, branch unknown | `<folder>` under its header | folder |
   | Otherwise | `<folder>` under the `Folders` header | folder |
   | Workspace with no folder | workspace title under the `Folders` header | folder |
