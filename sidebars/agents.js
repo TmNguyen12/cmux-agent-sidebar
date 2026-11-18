@@ -344,7 +344,7 @@ function headerRow() {
 function groupRow(row) {
   return HStack({ spacing: 5 }, [
     // Leading, so the key sits by the name and never reads as a time.
-    Text(() => row().shortcut).font(10).monospaced().color("tertiary").lineLimit(1).fixedSize(),
+    Text(() => row().shortcut).font(12).monospaced().color("tertiary").lineLimit(1).fixedSize(),
     Image(() => (row().groupKind === "folder" ? "folder" : "arrow.triangle.branch"))
       .font(10).color("tertiary"),
     Text(() => row().label)
@@ -364,7 +364,7 @@ function groupRow(row) {
 function agentRow(row) {
   const a = () => row().agent;
   return HStack({ spacing: 5 }, [
-    Text(() => row().tabKey).font(10).monospaced().color("tertiary").lineLimit(1).fixedSize(),
+    Text(() => row().tabKey).font(12).monospaced().color("tertiary").lineLimit(1).fixedSize(),
     Text(() => statusMeta(a().status).mark)
       .font(10).color(() => statusMeta(a().status).color).fixedSize(),
     Text(() => row().symbol).font(12).weight("bold").color(() => kindColor(row().agent.kind)).fixedSize(),
