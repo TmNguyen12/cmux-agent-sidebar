@@ -508,3 +508,126 @@ test("no tab key when the workspace has one tab, the tab is unknown, or past the
   assert.equal(group(r, "a:w2:b1").tabKey, "");
   assert.equal(group(r, "a:w2:b2").tabKey, "");
 });
+
+test("asksQuestion finds a question on the last line", () => {
+  assert.equal(sb.asksQuestion("Both tests pass.\n\nShould I push the branch?"), true);
+  assert.equal(sb.asksQuestion("Should I push the branch？"), true);
+});
+
+test("asksQuestion sees through closing markdown, quotes and brackets", () => {
+  assert.equal(sb.asksQuestion("**Should I push the branch?**"), true);
+  assert.equal(sb.asksQuestion("(or did you mean `main`?)"), true);
+});
+
+test("asksQuestion finds a question above its list of options", () => {
+  const message = [
+    "Which approach do you want?",
+    "",
+    "1. Extend the existing table",
+    "   - one migration",
+    "   - no new joins",
+    "2. Add a new table",
+    "   - two migrations",
+    "",
+    "I'd pick the first.",
+    "[confidence: 8/10 — read both schemas]",
+  ].join("\n");
+  assert.equal(sb.asksQuestion(message), true);
+});
+
+test("asksQuestion finds a question asked in a list item", () => {
+  assert.equal(sb.asksQuestion("Two things are open.\n- Should the limit be 50?\n- The name is fine."), true);
+});
+
+test("asksQuestion treats a confidence score under 7 as a question", () => {
+  assert.equal(sb.asksQuestion("I could not find the caller.\n[confidence: 6/10 — inferred]"), true);
+  assert.equal(sb.asksQuestion("I could not find the caller.\n**[Confidence: 6.5 / 10]**"), true);
+  assert.equal(sb.asksQuestion("Fixed and tested.\n[confidence: 7/10 — ran the suite]"), false);
+});
+
+test("asksQuestion says no for a finished report", () => {
+  const message = [
+    "## What changed",
+    "- Retries now back off.",
+    "- The test covers three attempts.",
+    "",
+    "All 42 tests pass.",
+    "[confidence: 9/10 — ran the suite]",
+  ].join("\n");
+  assert.equal(sb.asksQuestion(message), false);
+  assert.equal(sb.asksQuestion(""), false);
+  assert.equal(sb.asksQuestion(undefined), false);
+});
+
+test("asksQuestion ignores a question mark inside a line or a link", () => {
+  assert.equal(sb.asksQuestion("See https://example.com/search?q=cmux for more."), false);
+  assert.equal(sb.asksQuestion("Sources:\n- [Why hooks?](https://example.com/hooks)"), false);
+});
+
+test("asksQuestion reads three prose lines back, however many list lines sit between", () => {
+  const options = Array.from({ length: 12 }, (_, i) => "- option " + i);
+  assert.equal(sb.asksQuestion(["Pick one?", ...options, "One.", "Two."].join("\n")), true);
+  assert.equal(sb.asksQuestion(["Pick one?", ...options, "One.", "Two.", "Three."].join("\n")), false);
+});
+
+test("asksQuestion stops 40 lines from the end", () => {
+  const options = (n) => Array.from({ length: n }, (_, i) => "- option " + i);
+  assert.equal(sb.asksQuestion(["Pick one?", ...options(39)].join("\n")), true);
+  assert.equal(sb.asksQuestion(["Pick one?", ...options(40)].join("\n")), false);
+});
+
+test("asksQuestion reads only the end of a very long message", () => {
+  assert.equal(sb.asksQuestion("Is this right?\n" + "x".repeat(5000)), false);
+});
+
+test("an idle agent whose workspace's last message asks a question is waiting on you", () => {
+  const r = rows([ws("w1", {
+    directory: "/r/app", latestMessage: "Should I push the branch?",
+    agents: [agent("a1", "idle")],
+  })]);
+  assert.equal(group(r, "a:w1:a1").status, "needs_input");
+  assert.equal(group(r, "a:w1:a1").agent.status, "idle");
+  assert.equal(group(r, "g:/r/app").waiting, 1);
+});
+
+test("an idle agent stays done when the last message asks nothing or is missing", () => {
+  const r = rows([
+    ws("w1", { directory: "/r/a", latestMessage: "Pushed.", agents: [agent("a1", "idle")] }),
+    ws("w2", { directory: "/r/b", agents: [agent("b1", "idle")] }),
+  ]);
+  assert.equal(group(r, "a:w1:a1").status, "idle");
+  assert.equal(group(r, "a:w2:b1").status, "idle");
+  assert.equal(group(r, "g:/r/a").waiting, 0);
+});
+
+test("a question belongs to the workspace's most recently active agent only", () => {
+  const r = rows([ws("w1", {
+    directory: "/r/app", latestMessage: "Should I push the branch?",
+    agents: [agent("old", "idle", { lastActivityAt: 900 }), agent("new", "idle", { lastActivityAt: 990 })],
+  })]);
+  assert.equal(group(r, "a:w1:new").status, "needs_input");
+  assert.equal(group(r, "a:w1:old").status, "idle");
+});
+
+test("agents tied on last activity: the first one cmux lists gets the question", () => {
+  const r = rows([ws("w1", {
+    directory: "/r/app", latestMessage: "Should I push the branch?",
+    agents: [agent("first", "idle"), agent("second", "idle")],
+  })]);
+  assert.equal(group(r, "a:w1:first").status, "needs_input");
+  assert.equal(group(r, "a:w1:second").status, "idle");
+});
+
+test("a question is not pinned on an agent that is running or ended", () => {
+  const message = "Should I push the branch?";
+  const r = rows([
+    ws("w1", {
+      directory: "/r/a", latestMessage: message,
+      agents: [agent("idle", "idle", { lastActivityAt: 900 }), agent("busy", "working", { lastActivityAt: 990 })],
+    }),
+    ws("w2", { directory: "/r/b", latestMessage: message, agents: [agent("gone", "ended", { lastActivityAt: 990 })] }),
+  ]);
+  assert.equal(group(r, "a:w1:idle").status, "idle");
+  assert.equal(group(r, "a:w1:busy").status, "working");
+  assert.equal(group(r, "a:w2:gone").status, "ended");
+});

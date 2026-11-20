@@ -1,7 +1,7 @@
 # cmux-agent-sidebar design
 
 createdAt: 2026-11-13 23:05 EST
-lastUpdated: 2026-11-14 02:40 EST
+lastUpdated: 2026-11-20 15:00 EST
 
 ## Intent
 
@@ -127,6 +127,38 @@ One line: tab key, status mark, kind symbol, title, subagent count, time.
 | `ended` | ○ | Mocha Overlay0; hidden 15 min after last activity |
 
 Every status is a dot, told apart by color. This is a personal tool and the user chose color only.
+
+### Questions
+
+An agent that ends its turn on a question is `idle` to cmux. The sidebar shows
+it as `needs_input` instead, and counts it as waiting. Its time still reads
+`12m ago`: how long since it asked.
+
+- The text comes from `workspace.latestMessage`, read but never shown.
+- cmux gives one last message per workspace. It is read as the message of the
+  workspace's most recently active agent (`askingAgentId`), and only while
+  that agent is `idle`.
+- The cost: with two agents in one workspace, the older one's question is lost
+  once the other speaks.
+- The dot returns to green when the agent's next message asks nothing.
+
+`asksQuestion` reads back from the end of the message:
+
+| Line | Effect |
+| --- | --- |
+| Ends in `?`, allowing closing markdown, quotes or brackets | A question |
+| `[confidence: N/10 …]` with N under 7 | A question; the author's agents must stop and ask below 7 |
+| `[confidence: N/10 …]` with N of 7 or more | Skipped |
+| A bullet or numbered item | Checked for `?`, then skipped |
+| Any other line | Checked for `?`; the third such line ends the search |
+
+- Options usually sit under their question, so list lines don't use up the
+  three prose lines.
+- The search covers at most the last 40 lines and 4,000 characters, to stay
+  inside the render budget.
+- A closing offer such as "Want me to also do X?" counts. It is a decision
+  waiting on you.
+- An ask with no question mark, such as "say so and I'll do it", is missed.
 
 ### Look
 

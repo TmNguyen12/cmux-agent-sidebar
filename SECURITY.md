@@ -1,7 +1,7 @@
 # Security
 
 createdAt: 2026-11-13 23:55 EST
-lastUpdated: 2026-11-14 03:30 EST
+lastUpdated: 2026-11-20 15:00 EST
 
 This project exists partly for security reasons. It shows agent state in cmux without adding anything that runs on every agent turn. This page records what was considered and why the design is what it is.
 
@@ -41,6 +41,7 @@ The sidebar is one file, `sidebars/agents.js`, run by cmux's JavaScript sidebar 
 - **Contained by cmux's JS runtime.** No filesystem, network, timers or child processes, and a watchdog stops runaway code. This is a JavaScript context inside the cmux app (in-process by default), not an OS sandbox.
 - **Receives** the full workspace object cmux passes to every sidebar, including prompts, last messages, transcript paths and PR links.
 - **Displays** workspace titles, folders, branches, dirty state, and each agent's kind, status, times, tab title or first prompt, and running subagent count.
+- **Reads each workspace's last agent message** to tell whether it ends on a question. The text only picks the dot's color; it is never shown, stored or passed to a cmux command.
 - **Actions:** only `workspace.select` and `surface.focus`, and only from a click on a row. `tests/view.test.mjs` checks that:
   - loading and rendering make no cmux calls;
   - every click handler calls only those two commands;

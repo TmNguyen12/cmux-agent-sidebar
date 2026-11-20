@@ -32,6 +32,49 @@ function statusMeta(status) {
   return { mark: "○", label: String(status), color: "#6c7086" };
 }
 
+// An agent that ends its turn on a question is idle to cmux, yet it is waiting
+// on you. The question sits near the end of the last message, often above a
+// list of options, so list lines are read without using up the prose lines.
+const QUESTION_PROSE_LINES = 3;
+const QUESTION_MAX_LINES = 40;
+// Only the end of a long message is read, to stay inside the render budget.
+const QUESTION_TAIL_CHARS = 4000;
+// A line ending in a question mark, allowing closing markdown, quotes or brackets.
+const ENDS_IN_QUESTION = /[?？][\s*_`"')\]”’]*$/;
+// A bullet (- * + •) or a numbered item (1. or 1)).
+const LIST_ITEM = /^(?:[-*+•]|\d+[.)])\s/;
+// The author's agents close a reply with "[confidence: N/10 …]" and must stop
+// and ask below 7, so a low score counts as a question with no question mark.
+const CONFIDENCE = /\[confidence:\s*(\d+(?:\.\d+)?)\s*\/\s*10\b/i;
+const CONFIDENCE_ASKS_BELOW = 7;
+
+function asksQuestion(message) {
+  const lines = String(message ?? "").slice(-QUESTION_TAIL_CHARS)
+    .split("\n").map((l) => l.trim()).filter((l) => l.length > 0);
+  const stop = Math.max(0, lines.length - QUESTION_MAX_LINES);
+  let prose = 0;
+  for (let i = lines.length - 1; i >= stop; i--) {
+    const score = CONFIDENCE.exec(lines[i]);
+    if (score) {
+      if (Number(score[1]) < CONFIDENCE_ASKS_BELOW) return true;
+      continue;
+    }
+    if (ENDS_IN_QUESTION.test(lines[i])) return true;
+    if (!LIST_ITEM.test(lines[i]) && ++prose >= QUESTION_PROSE_LINES) return false;
+  }
+  return false;
+}
+
+// cmux gives the last message per workspace, not per agent, so it is read as
+// the message of the workspace's most recently active agent. An older agent's
+// question is lost once another agent in that workspace speaks.
+function askingAgentId(w) {
+  const agents = w.agents ?? [];
+  if (agents.length === 0) return undefined;
+  const latest = agents.reduce((x, y) => ((y.lastActivityAt ?? 0) > (x.lastActivityAt ?? 0) ? y : x));
+  return latest.status === "idle" && asksQuestion(w.latestMessage) ? latest.id : undefined;
+}
+
 const KIND_SYMBOLS = { claude: "✻", codex: "◆" };
 // Claude in its clay brand color; Codex in the plain text color.
 const KIND_COLORS = { claude: "#D97757", codex: "primary" };
@@ -183,6 +226,7 @@ function buildRows(workspaces, epoch) {
     // checkout's own workspace's.
     const owns = wsDir === worktreeRoot(normPath(w.directory));
     const agents = (w.agents ?? []).filter((a) => visible(a, epoch));
+    const asking = askingAgentId(w);
     if (wsDir) {
       ensure(wsDir, {
         key: "g:" + wsDir, path: wsDir,
@@ -197,6 +241,7 @@ function buildRows(workspaces, epoch) {
       const dir = worktreeRoot(normPath(a.directory)) ?? wsDir;
       const entry = {
         wsId: w.id, agent: a, title: agentTitle(a, tab, dir), order, tabIndex,
+        status: a.id === asking ? "needs_input" : a.status,
         focused: w.selected === true && tab?.focused === true,
         // ⌃1…⌃9 pick a tab after ⌘N picks the workspace. The sidebar data has
         // no split panes, so this assumes the workspace has none. A lone tab
@@ -257,13 +302,13 @@ function buildRows(workspaces, epoch) {
       key: g.key, kind: "group", groupKind, label: checkout ?? label, shortcut, nested: true,
       // The dirty flag goes stale the same way as the branch.
       dirty: groupKind !== "worktree" && g.dirty === true, wsId: g.wsId, selected: g.selected === true,
-      working: g.agents.filter((e) => e.agent.status === "working").length,
-      waiting: g.agents.filter((e) => e.agent.status === "needs_input").length,
+      working: g.agents.filter((e) => e.status === "working").length,
+      waiting: g.agents.filter((e) => e.status === "needs_input").length,
       total: g.agents.length,
     });
-    for (const { wsId, agent, title, focused, tabKey } of g.agents) {
+    for (const { wsId, agent, status, title, focused, tabKey } of g.agents) {
       out.push({
-        key: "a:" + wsId + ":" + agent.id, kind: "agent", wsId, agent, title, focused, tabKey,
+        key: "a:" + wsId + ":" + agent.id, kind: "agent", wsId, agent, status, title, focused, tabKey,
         symbol: kindSymbol(agent.kind),
         subagents: (agent.children ?? []).filter((c) => c.running).length,
       });
@@ -393,8 +438,8 @@ function agentRow(row) {
   const a = () => row().agent;
   return HStack({ spacing: 5 }, [
     Text(() => row().tabKey).font(10).monospaced().color("tertiary").lineLimit(1).fixedSize(),
-    Text(() => statusMeta(a().status).mark)
-      .font(10).color(() => statusMeta(a().status).color).fixedSize(),
+    Text(() => statusMeta(row().status).mark)
+      .font(10).color(() => statusMeta(row().status).color).fixedSize(),
     Text(() => row().symbol).font(12).weight("bold").color(() => kindColor(row().agent.kind)).fixedSize(),
     Text(() => row().title)
       .font(11).lineLimit(1).truncation("tail")
