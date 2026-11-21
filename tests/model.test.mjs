@@ -670,6 +670,42 @@ test("asksQuestion reads only the end of a very long message", () => {
   assert.equal(sb.asksQuestion("Is this right?\n" + "x".repeat(5000)), false);
 });
 
+test("asksQuestion finds the marker at the start of a reply cut short by cmux", () => {
+  const head = "Needs you: Which fix do you want for the question flag? ## What this means - The flag only fires on short replies. - The README overstates it. ## Options 1. Agents put the question fi…";
+  assert.equal(sb.asksQuestion(head), true);
+  assert.equal(sb.asksQuestion("Needs you: pick a region.\n\nThe rest is done."), true);
+});
+
+test("asksQuestion sees the marker through markdown, case and leading space", () => {
+  assert.equal(sb.asksQuestion("**Needs you:** pick a region."), true);
+  assert.equal(sb.asksQuestion("**Needs you**: pick a region."), true);
+  assert.equal(sb.asksQuestion("## needs you: pick a region."), true);
+  assert.equal(sb.asksQuestion("\n  > NEEDS YOU: pick a region."), true);
+});
+
+test("asksQuestion wants the marker first, whole and with its colon", () => {
+  assert.equal(sb.asksQuestion("Done. Needs you: nothing, I was only quoting the marker."), false);
+  assert.equal(sb.asksQuestion("Needs you to restart the session. Everything else is done."), false);
+  assert.equal(sb.asksQuestion("Needs your review: nothing is blocked."), false);
+  assert.equal(sb.asksQuestion("He needs you: the caller that broke."), false);
+});
+
+test("asksQuestion finds a question in a short reply that arrives as one line", () => {
+  assert.equal(sb.asksQuestion("Both tests pass. Should I push the branch? [confidence: 8/10 — ran the suite]"), true);
+  assert.equal(sb.asksQuestion("Should I push the branch? **[confidence: 8/10]**"), true);
+  assert.equal(sb.asksQuestion("Both tests pass. Pushed the branch. [confidence: 8/10 — ran the suite]"), false);
+});
+
+test("a reply cut short by cmux shows as waiting only when it starts with the marker", () => {
+  const cut = "## What changed - Retries now back off. - The test covers three attempts. ## Options 1. Extend the existing ta…";
+  const r = rows([
+    ws("w1", { directory: "/r/a", latestMessage: "Needs you: which table? " + cut, agents: [agent("a1", "idle")] }),
+    ws("w2", { directory: "/r/b", latestMessage: cut, agents: [agent("b1", "idle")] }),
+  ]);
+  assert.equal(group(r, "a:w1:a1").status, "needs_input");
+  assert.equal(group(r, "a:w2:b1").status, "idle");
+});
+
 test("an idle agent whose workspace's last message asks a question is waiting on you", () => {
   const r = rows([ws("w1", {
     directory: "/r/app", latestMessage: "Should I push the branch?",

@@ -33,8 +33,9 @@ function statusMeta(status) {
 }
 
 // An agent that ends its turn on a question is idle to cmux, yet it is waiting
-// on you. The question sits near the end of the last message, often above a
-// list of options, so list lines are read without using up the prose lines.
+// on you. In a reply short enough to arrive whole, the question sits near the
+// end, often above a list of options, so list lines are read without using up
+// the prose lines.
 const QUESTION_PROSE_LINES = 3;
 const QUESTION_MAX_LINES = 40;
 // Only the end of a long message is read, to stay inside the render budget.
@@ -47,20 +48,30 @@ const LIST_ITEM = /^(?:[-*+•]|\d+[.)])\s/;
 // and ask below 7, so a low score counts as a question with no question mark.
 const CONFIDENCE = /\[confidence:\s*(\d+(?:\.\d+)?)\s*\/\s*10\b/i;
 const CONFIDENCE_ASKS_BELOW = 7;
+// cmux passes only the start of the last message, about 200 characters, so the
+// end of a long reply never arrives. The author's agents start a reply that
+// waits on an answer with "Needs you:", allowing markdown around it.
+const ASK_MARKER = /^[\s*_`#>]*needs you[*_`]*:/i;
+const TRAILING_MARKDOWN = /[\s*_`]+$/;
 
 function asksQuestion(message) {
-  const lines = String(message ?? "").slice(-QUESTION_TAIL_CHARS)
+  const text = String(message ?? "");
+  if (ASK_MARKER.test(text)) return true;
+  const lines = text.slice(-QUESTION_TAIL_CHARS)
     .split("\n").map((l) => l.trim()).filter((l) => l.length > 0);
   const stop = Math.max(0, lines.length - QUESTION_MAX_LINES);
   let prose = 0;
   for (let i = lines.length - 1; i >= stop; i--) {
-    const score = CONFIDENCE.exec(lines[i]);
+    let line = lines[i];
+    const score = CONFIDENCE.exec(line);
     if (score) {
       if (Number(score[1]) < CONFIDENCE_ASKS_BELOW) return true;
-      continue;
+      // A short reply can arrive as one line, with the score after the question.
+      line = line.slice(0, score.index).replace(TRAILING_MARKDOWN, "");
+      if (line.length === 0) continue;
     }
-    if (ENDS_IN_QUESTION.test(lines[i])) return true;
-    if (!LIST_ITEM.test(lines[i]) && ++prose >= QUESTION_PROSE_LINES) return false;
+    if (ENDS_IN_QUESTION.test(line)) return true;
+    if (!LIST_ITEM.test(line) && ++prose >= QUESTION_PROSE_LINES) return false;
   }
   return false;
 }

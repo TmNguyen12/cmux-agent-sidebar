@@ -6,7 +6,7 @@ A [cmux](https://github.com/manaflow-ai/cmux) sidebar that shows each coding age
 
 - One line per agent: status dot, `✻` Claude or `◆` Codex, title, time. `↳2` counts running subagents.
 - Dots: blue running, orange waiting on you, green done, gray ○ ended.
-- An agent that ends its turn on a question shows orange, not green.
+- An agent waiting on your answer shows orange, not green, when its reply starts with `Needs you:`. See [Flag a question](#flag-a-question).
 - A second workspace on a folder, such as a new plain shell, gets a shell row under the folder while it has no agents.
 - Click a row to switch to its workspace. Click an agent to jump to its terminal.
 - No hooks, background jobs or network access. See [SECURITY.md](SECURITY.md).
@@ -104,6 +104,22 @@ It writes one escape code to the agent's own tab. It lives in your Claude Code c
 
 Codex has no equivalent; start it inside the worktree.
 
+## Flag a question
+
+Optional. An agent that ends its turn on a question is done to cmux, so it shows green.
+
+cmux passes a sidebar only the first 200 or so characters of an agent's last message. A question usually sits at the end, where the sidebar can't see it. Have the agent put it first.
+
+**Add to your agent instructions** (`~/.claude/CLAUDE.md`, `~/.codex/AGENTS.md`):
+
+```md
+- When a reply ends your turn on a question or a decision for me, start it with `Needs you: <the question in one line>`. Leave the marker off when nothing waits on me.
+```
+
+- A reply that starts with `Needs you:` shows orange until the agent's next message.
+- A reply short enough to arrive whole also shows orange when it ends on a question mark.
+- Agents already running keep their old instructions until you restart them.
+
 ## Tips
 
 - **Rename an agent:** press ⌘R in its tab, or `cmux rename-tab --surface <surface> "<name>"` (`cmux tree` lists surfaces). An untitled tab shows the agent's first prompt.
@@ -116,7 +132,8 @@ Codex has no equivalent; start it inside the worktree.
 - **Tab keys assume no split panes.** cmux numbers tabs per pane, but the sidebar sees one list, so `⌃N` can be wrong with splits.
 - **Two workspaces on one folder share a group row.** Clicking it opens the selected one, else the first. Reach the other through its agent rows, or its shell row when it has no agents.
 - **No grouping by edited files.** That would need hooks.
-- **Questions are found by a question mark.** An ask without one stays green. The rules are in [docs/design.md](docs/design.md#questions).
+- **A question in a long reply needs the marker.** Without `Needs you:` at the start it stays green, and so does a short ask with no question mark. The rules are in [docs/design.md](docs/design.md#questions).
+- **Question flags are untested with Codex.**
 - **One question per workspace.** cmux gives one last message per workspace, so with two agents in one workspace only the most recent can show a question.
 
 ## Development
