@@ -140,7 +140,7 @@ test("a workspace in a checkout subfolder joins the open checkout that holds it"
     ws("w1", { directory: "/r/app", branch: "main", index: 0 }),
     ws("w2", { directory: "/r/app/_claude/plans", branch: "main", index: 1, agents: [agent("a1", "working")] }),
   ]);
-  assert.deepEqual(k, ["r:/r/app", "g:/r/app", "a:w2:a1"]);
+  assert.deepEqual(k, ["r:/r/app", "g:/r/app", "a:w2:a1", "s:w1"]);
 });
 
 test("a folded subfolder workspace doesn't take the checkout's row from its workspace", () => {
@@ -206,7 +206,7 @@ test("a workspace folds only into the outermost open checkout on its branch", ()
     ws("w1", { directory: "/r/a", branch: "main", index: 0 }),
     ws("w2", { directory: "/r/a/b", branch: "main", index: 1 }),
     ws("w3", { directory: "/r/a/b/c", branch: "main", index: 2 }),
-  ]), ["r:/r/a", "g:/r/a"]);
+  ]), ["r:/r/a", "g:/r/a", "s:w1", "s:w2", "s:w3"]);
   assert.deepEqual(keys([
     ws("w1", { directory: "/r", branch: "main", index: 0 }),
     ws("w2", { directory: "/r/app/.claude/worktrees/feat", branch: "feat", index: 1 }),
@@ -418,6 +418,88 @@ test("two workspaces on one folder: the group targets the selected one", () => {
   assert.equal(group(r, "g:/r/app").wsId, "w2");
 });
 
+test("a workspace with no agents on a shared folder gets a shell row after the agents", () => {
+  const r = rows([
+    ws("w1", { directory: "/r/app", index: 0, title: "zsh" }),
+    ws("w2", { directory: "/r/app", index: 1, agents: [agent("a1", "working")] }),
+  ]);
+  assert.deepEqual(r.map((x) => x.key), ["r:folders", "g:/r/app", "a:w2:a1", "s:w1"]);
+  assert.deepEqual(group(r, "s:w1"), { key: "s:w1", kind: "shell", wsId: "w1", title: "zsh", shortcut: "⌘1", focused: false });
+});
+
+test("two workspaces with no agents on one folder get a shell row each, in workspace order", () => {
+  const k = keys([
+    ws("w2", { directory: "/r/app", index: 1 }),
+    ws("w1", { directory: "/r/app", index: 0 }),
+  ]);
+  assert.deepEqual(k, ["r:folders", "g:/r/app", "s:w1", "s:w2"]);
+});
+
+test("a folder's only workspace gets no shell row", () => {
+  assert.deepEqual(keys([ws("w1", { directory: "/r/app" })]), ["r:folders", "g:/r/app"]);
+});
+
+test("a folded subfolder workspace with no agents gets a shell row under its checkout", () => {
+  const k = keys([
+    ws("w1", { directory: "/r/app", branch: "main", index: 0, agents: [agent("a1", "working")] }),
+    ws("w2", { directory: "/r/app/_claude", branch: "main", index: 1 }),
+  ]);
+  assert.deepEqual(k, ["r:/r/app", "g:/r/app", "a:w1:a1", "s:w2"]);
+});
+
+test("a workspace with no folder gets no shell row", () => {
+  const k = keys([ws("w1", { title: "scratch", index: 0 }), ws("w2", { title: "scratch", index: 1 })]);
+  assert.deepEqual(k, ["r:folders", "g:ws:w1", "g:ws:w2"]);
+});
+
+test("an agent's folder doesn't count as a workspace on that folder", () => {
+  const k = keys([
+    ws("w1", { directory: "/r/a", index: 0, agents: [agent("a1", "working", { directory: "/r/b" })] }),
+    ws("w2", { directory: "/r/b", index: 1 }),
+  ]);
+  assert.deepEqual(k, ["r:folders", "g:/r/a", "g:/r/b", "a:w1:a1"]);
+});
+
+test("a workspace whose agents have all ended and hidden gets a shell row on a shared folder", () => {
+  const k = keys([
+    ws("w1", { directory: "/r/app", index: 0, agents: [agent("old", "ended", { lastActivityAt: EPOCH - 901 })] }),
+    ws("w2", { directory: "/r/app", index: 1, agents: [agent("a2", "idle")] }),
+  ]);
+  assert.deepEqual(k, ["r:folders", "g:/r/app", "a:w2:a2", "s:w1"]);
+});
+
+test("a shell row with no workspace title is titled shell", () => {
+  const r = rows([ws("w1", { directory: "/r/app", title: "" }), ws("w2", { directory: "/r/app" })]);
+  assert.equal(group(r, "s:w1").title, "shell");
+  assert.equal(group(r, "s:w2").title, "w2");
+});
+
+test("a shell row shows its own workspace's key, none past the ninth", () => {
+  const r = rows([
+    ws("w1", { directory: "/r/app", index: 1 }),
+    ws("w2", { directory: "/r/app", index: 9, selected: true }),
+  ]);
+  assert.equal(group(r, "g:/r/app").shortcut, "");
+  assert.equal(group(r, "s:w1").shortcut, "⌘2");
+  assert.equal(group(r, "s:w2").shortcut, "");
+});
+
+test("a shell row is focused when its workspace is selected", () => {
+  const r = rows([ws("w1", { directory: "/r/app" }), ws("w2", { directory: "/r/app", selected: true })]);
+  assert.equal(group(r, "s:w1").focused, false);
+  assert.equal(group(r, "s:w2").focused, true);
+});
+
+test("shell rows don't count toward a group's agents", () => {
+  const r = rows([
+    ws("w1", { directory: "/r/app", agents: [agent("a", "working"), agent("b", "needs_input")] }),
+    ws("w2", { directory: "/r/app" }),
+    ws("w3", { directory: "/r/app" }),
+  ]);
+  const g = group(r, "g:/r/app");
+  assert.deepEqual({ working: g.working, waiting: g.waiting, total: g.total }, { working: 1, waiting: 1, total: 2 });
+});
+
 test("agent rows carry their title, kind symbol and running subagent count", () => {
   const r = rows([ws("w1", {
     directory: "/r/app",
@@ -439,6 +521,14 @@ test("the list is capped with a +N more row at the end", () => {
   assert.equal(r.length, 200 + 1);
   assert.equal(r[r.length - 1].kind, "more");
   assert.equal(r[r.length - 1].text, "+101 more");
+});
+
+test("shell rows count toward the row cap", () => {
+  const many = Array.from({ length: 300 }, (_, i) => ws("w" + i, { directory: "/r/app", index: i }));
+  const r = rows(many);
+  assert.equal(r.length, 200 + 1);
+  assert.equal(r[r.length - 2].kind, "shell");
+  assert.equal(r[r.length - 1].text, "+102 more");
 });
 
 test("kindColor paints Claude in its clay color and Codex in the text color", () => {

@@ -161,8 +161,8 @@ function visible(agent, epoch) {
 }
 
 // Flat, keyed row list for one ForEach: a group row per worktree, repo or
-// folder, each followed by its agent rows. Keys encode the row kind, so a key's
-// template never changes kind across live updates.
+// folder, each followed by its agent rows, then its shell rows. Keys encode the
+// row kind, so a key's template never changes kind across live updates.
 function buildRows(workspaces, epoch) {
   // A workspace sitting in a checkout's subfolder reports the checkout's
   // branch, so it would look like a repo of its own. Fold it into the
@@ -189,12 +189,14 @@ function buildRows(workspaces, epoch) {
     .sort((a, b) => b.length - a.length);
   const groupOf = (dir) =>
     wsDirs.find((d) => dir === d || dir.startsWith(d + "/")) ?? dir;
+  const wsCount = new Map();
+  for (const d of wsDirs) wsCount.set(d, (wsCount.get(d) ?? 0) + 1);
 
   const groups = new Map();
   const ensure = (id, init) => {
     let g = groups.get(id);
     if (!g) {
-      g = { ...init, agents: [] };
+      g = { ...init, agents: [], shells: [] };
       if (init.owner) g.ownerOrder = init.order;
       groups.set(id, g);
     }
@@ -228,11 +230,16 @@ function buildRows(workspaces, epoch) {
     const agents = (w.agents ?? []).filter((a) => visible(a, epoch));
     const asking = askingAgentId(w);
     if (wsDir) {
-      ensure(wsDir, {
+      const home = ensure(wsDir, {
         key: "g:" + wsDir, path: wsDir,
         branch: owns ? w.branch : undefined, dirty: owns ? w.dirty : undefined,
         wsId: w.id, owner: owns || w.selected === true, selected: w.selected, order,
       });
+      // A folder's group row selects only one of its workspaces, so on a shared
+      // folder a workspace with no agent rows would be unreachable without one.
+      if (agents.length === 0 && wsCount.get(wsDir) > 1) {
+        home.shells.push({ wsId: w.id, title: w.title || "shell", order, focused: w.selected === true });
+      }
     }
     for (const a of agents) {
       const tabs = w.tabs ?? [];
@@ -269,6 +276,7 @@ function buildRows(workspaces, epoch) {
   // workspace's folder to its focused tab, so groups in one workspace sort by
   // folder, and agents sort by tab, not by status.
   const byKey = (a, b) => (a < b ? -1 : a > b ? 1 : 0);
+  const wsKey = (order) => (order < 9 ? "⌘" + (order + 1) : "");
   const ordered = [...groups.values()].sort((a, b) => a.order - b.order || byKey(a.key, b.key));
 
   // Checkouts of one repo sit under a repo row placed at the repo's first
@@ -296,8 +304,7 @@ function buildRows(workspaces, epoch) {
       (x.order - y.order) || (tabOrder(x) - tabOrder(y)) || byKey(String(x.agent.id), String(y.agent.id)));
     // ⌘1…⌘9 select workspaces, so a group shows its workspace's key. A group
     // that is only an agent's folder shows the key of the workspace hosting it.
-    const n = g.owner ? g.ownerOrder : g.order;
-    const shortcut = n < 9 ? "⌘" + (n + 1) : "";
+    const shortcut = wsKey(g.owner ? g.ownerOrder : g.order);
     out.push({
       key: g.key, kind: "group", groupKind, label: checkout ?? label, shortcut, nested: true,
       // The dirty flag goes stale the same way as the branch.
@@ -312,6 +319,10 @@ function buildRows(workspaces, epoch) {
         symbol: kindSymbol(agent.kind),
         subagents: (agent.children ?? []).filter((c) => c.running).length,
       });
+    }
+    g.shells.sort((x, y) => x.order - y.order);
+    for (const { wsId, title, order, focused } of g.shells) {
+      out.push({ key: "s:" + wsId, kind: "shell", wsId, title, shortcut: wsKey(order), focused });
     }
   };
 
