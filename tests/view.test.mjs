@@ -22,8 +22,9 @@ test("fmtAgo uses the largest whole unit", () => {
   assert.equal(sb.fmtAgo(2 * 86400 + 5), "2d");
 });
 
-// Every row kind and status, an agent without a surfaceId, subagents, and a
-// workspace with no folder, so every row builder and tap handler is reached.
+// Every row kind and status, an agent without a surfaceId, subagents, a
+// workspace with no folder and a second, agent-less workspace on w1's folder,
+// so every row builder and tap handler is reached.
 const fixture = [
   ws("w1", {
     directory: "/r/worktrees/app/main", branch: "main", selected: true,
@@ -42,6 +43,7 @@ const fixture = [
     ],
   }),
   ws("w2", { title: "scratch" }),
+  ws("w3", { directory: "/r/worktrees/app/main", branch: "main" }),
 ];
 
 test("render builds every row without throwing", () => {
@@ -63,6 +65,7 @@ test("tapping rows selects workspaces and focuses agent terminals", () => {
   for (const tap of ctx.__taps) tap();
   const calls = JSON.parse(JSON.stringify(ctx.__cmuxCalls));
   assert.ok(calls.some((c) => c.method === "workspace.select" && c.params.workspace_id === "w2"));
+  assert.ok(calls.some((c) => c.method === "workspace.select" && c.params.workspace_id === "w3"));
   assert.ok(calls.some((c) => c.method === "surface.focus" && c.params.surface_id === "s1"));
   assert.ok(calls.some((c) => c.method === "surface.focus" && c.params.surface_id === "s2"));
 });
@@ -99,15 +102,16 @@ test("agentTime says ago for done agents and ticks elapsed for running ones", ()
   assert.equal(sb.agentTime({ status: "needs_input", sinceEpoch: 970 }, 1000), "30s");
 });
 
-test("toCards nests each group's agents under it and keeps the more row", () => {
+test("toCards nests each group's agent and shell rows under it and keeps the more row", () => {
   const rows = [
     { key: "g:/a", kind: "group" }, { key: "a:1", kind: "agent" }, { key: "a:2", kind: "agent" },
+    { key: "s:w2", kind: "shell" },
     { key: "g:/b", kind: "group" },
     { key: "m:rows", kind: "more" },
   ];
   const cards = JSON.parse(JSON.stringify(sb.toCards(rows)));
-  assert.deepEqual(cards.map((c) => [c.key, c.kind, (c.agents ?? []).map((a) => a.key)]), [
-    ["g:/a", "card", ["a:1", "a:2"]],
+  assert.deepEqual(cards.map((c) => [c.key, c.kind, (c.rows ?? []).map((a) => a.key)]), [
+    ["g:/a", "card", ["a:1", "a:2", "s:w2"]],
     ["d:g:/b", "divider", []],
     ["g:/b", "card", []],
     ["m:rows", "more", []],
@@ -121,7 +125,7 @@ test("toCards keeps repo rows and gives nested groups their own card kind and ke
     { key: "g:/docs", kind: "group", nested: false },
   ];
   const cards = JSON.parse(JSON.stringify(sb.toCards(rows)));
-  assert.deepEqual(cards.map((c) => [c.key, c.kind, (c.agents ?? []).map((a) => a.key)]), [
+  assert.deepEqual(cards.map((c) => [c.key, c.kind, (c.rows ?? []).map((a) => a.key)]), [
     ["r:/r/app", "repo", []],
     ["n:g:/r/app", "nestedCard", ["a:1"]],
     ["d:g:/docs", "divider", []],

@@ -470,6 +470,25 @@ function agentRow(row) {
     .onTap(() => focusAgent(row()));
 }
 
+// Same insets as an agent row, so the key and title columns line up.
+function shellRow(row) {
+  return HStack({ spacing: 5 }, [
+    Text(() => row().shortcut).font(12).monospaced().color("tertiary").lineLimit(1).fixedSize(),
+    Image("terminal").font(10).color("tertiary"),
+    Text(() => row().title).font(11).lineLimit(1).truncation("tail").color("secondary"),
+    Spacer(),
+  ])
+    .paddingLeading(18).paddingTrailing(8).paddingVertical(2)
+    .cornerRadius(CARD_RADIUS - 2)
+    .background(() => (row().focused ? MOCHA.focusFill : null))
+    .hoverBackground(MOCHA.hoverFill)
+    .cursor("pointer")
+    .frame({ maxWidth: "infinity" })
+    .onTap(() => cmux("workspace.select", { workspace_id: row().wsId }));
+}
+
+const CARD_ROW_VIEWS = { agent: agentRow, shell: shellRow };
+
 // A section label over the repo's checkouts, with no icon, so it reads apart
 // from the checkout rows; each checkout row selects its workspace.
 function repoRow(card) {
@@ -501,9 +520,9 @@ function toCards(flat) {
   for (const r of flat) {
     if (r.kind === "repo" || (r.kind === "group" && !r.nested)) divide(r.key);
     if (r.kind === "repo") cards.push({ key: r.key, kind: "repo", label: r.label });
-    else if (r.kind === "group" && r.nested) cards.push({ key: "n:" + r.key, kind: "nestedCard", group: r, agents: [] });
-    else if (r.kind === "group") cards.push({ key: r.key, kind: "card", group: r, agents: [] });
-    else if (r.kind === "agent" && cards.length) cards[cards.length - 1].agents.push(r);
+    else if (r.kind === "group" && r.nested) cards.push({ key: "n:" + r.key, kind: "nestedCard", group: r, rows: [] });
+    else if (r.kind === "group") cards.push({ key: r.key, kind: "card", group: r, rows: [] });
+    else if (Object.hasOwn(CARD_ROW_VIEWS, r.kind) && cards.length) cards[cards.length - 1].rows.push(r);
     else if (r.kind === "more") cards.push(r);
   }
   return cards;
@@ -517,7 +536,7 @@ function cardView(card, indent = 0) {
   const selected = () => card().group.selected;
   return VStack({ spacing: 1 }, [
     groupRow(() => card().group),
-    ForEach({ items: () => card().agents, key: (r) => r.key }, agentRow),
+    ForEach({ items: () => card().rows, key: (r) => r.key }, (r) => CARD_ROW_VIEWS[r().kind](r)),
   ])
     .padding(3)
     .cornerRadius(CARD_RADIUS)
