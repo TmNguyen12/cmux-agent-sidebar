@@ -7,6 +7,7 @@ A [cmux](https://github.com/manaflow-ai/cmux) sidebar that shows each coding age
 - One line per agent: status dot, `✻` Claude or `◆` Codex, title, time. `↳2` counts running subagents.
 - Dots: blue running, orange waiting on you, green done, gray ○ ended.
 - An agent that ends its turn on a question shows orange, not green.
+- A second workspace on a folder, such as a new plain shell, gets a shell row under the folder while it has no agents.
 - Click a row to switch to its workspace. Click an agent to jump to its terminal.
 - No hooks, background jobs or network access. See [SECURITY.md](SECURITY.md).
 
@@ -113,7 +114,7 @@ Codex has no equivalent; start it inside the worktree.
 
 - **Background subagents drop out of `↳N` early.** cmux marks a subagent done when the call that started it returns.
 - **Tab keys assume no split panes.** cmux numbers tabs per pane, but the sidebar sees one list, so `⌃N` can be wrong with splits.
-- **Two workspaces on one folder share a row.** Clicking it opens the selected one, else the first.
+- **Two workspaces on one folder share a group row.** Clicking it opens the selected one, else the first. Reach the other through its agent rows, or its shell row when it has no agents.
 - **No grouping by edited files.** That would need hooks.
 - **Questions are found by a question mark.** An ask without one stays green. The rules are in [docs/design.md](docs/design.md#questions).
 - **One question per workspace.** cmux gives one last message per workspace, so with two agents in one workspace only the most recent can show a question.
