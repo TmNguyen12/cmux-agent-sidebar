@@ -172,8 +172,8 @@ function visible(agent, epoch) {
 }
 
 // Flat, keyed row list for one ForEach: a group row per worktree, repo or
-// folder, each followed by its agent rows. Keys encode the row kind, so a key's
-// template never changes kind across live updates.
+// folder, each followed by its agent rows, then its shell rows. Keys encode the
+// row kind, so a key's template never changes kind across live updates.
 function buildRows(workspaces, epoch) {
   // A workspace sitting in a checkout's subfolder reports the checkout's
   // branch, so it would look like a repo of its own. Fold it into the
@@ -200,12 +200,14 @@ function buildRows(workspaces, epoch) {
     .sort((a, b) => b.length - a.length);
   const groupOf = (dir) =>
     wsDirs.find((d) => dir === d || dir.startsWith(d + "/")) ?? dir;
+  const wsCount = new Map();
+  for (const d of wsDirs) wsCount.set(d, (wsCount.get(d) ?? 0) + 1);
 
   const groups = new Map();
   const ensure = (id, init) => {
     let g = groups.get(id);
     if (!g) {
-      g = { ...init, agents: [] };
+      g = { ...init, agents: [], shells: [] };
       if (init.owner) g.ownerOrder = init.order;
       groups.set(id, g);
     }
@@ -239,11 +241,16 @@ function buildRows(workspaces, epoch) {
     const agents = (w.agents ?? []).filter((a) => visible(a, epoch));
     const asking = askingAgentId(w);
     if (wsDir) {
-      ensure(wsDir, {
+      const home = ensure(wsDir, {
         key: "g:" + wsDir, path: wsDir,
         branch: owns ? w.branch : undefined, dirty: owns ? w.dirty : undefined,
         wsId: w.id, owner: owns || w.selected === true, selected: w.selected, order,
       });
+      // A folder's group row selects only one of its workspaces, so on a shared
+      // folder a workspace with no agent rows would be unreachable without one.
+      if (agents.length === 0 && wsCount.get(wsDir) > 1) {
+        home.shells.push({ wsId: w.id, title: w.title || "shell", order, focused: w.selected === true });
+      }
     }
     for (const a of agents) {
       const tabs = w.tabs ?? [];
@@ -280,6 +287,7 @@ function buildRows(workspaces, epoch) {
   // workspace's folder to its focused tab, so groups in one workspace sort by
   // folder, and agents sort by tab, not by status.
   const byKey = (a, b) => (a < b ? -1 : a > b ? 1 : 0);
+  const wsKey = (order) => (order < 9 ? "⌘" + (order + 1) : "");
   const ordered = [...groups.values()].sort((a, b) => a.order - b.order || byKey(a.key, b.key));
 
   // Checkouts of one repo sit under a repo row placed at the repo's first
@@ -307,8 +315,7 @@ function buildRows(workspaces, epoch) {
       (x.order - y.order) || (tabOrder(x) - tabOrder(y)) || byKey(String(x.agent.id), String(y.agent.id)));
     // ⌘1…⌘9 select workspaces, so a group shows its workspace's key. A group
     // that is only an agent's folder shows the key of the workspace hosting it.
-    const n = g.owner ? g.ownerOrder : g.order;
-    const shortcut = n < 9 ? "⌘" + (n + 1) : "";
+    const shortcut = wsKey(g.owner ? g.ownerOrder : g.order);
     out.push({
       key: g.key, kind: "group", groupKind, label: checkout ?? label, shortcut, nested: true,
       // The dirty flag goes stale the same way as the branch.
@@ -323,6 +330,10 @@ function buildRows(workspaces, epoch) {
         symbol: kindSymbol(agent.kind),
         subagents: (agent.children ?? []).filter((c) => c.running).length,
       });
+    }
+    g.shells.sort((x, y) => x.order - y.order);
+    for (const { wsId, title, order, focused } of g.shells) {
+      out.push({ key: "s:" + wsId, kind: "shell", wsId, title, shortcut: wsKey(order), focused });
     }
   };
 
@@ -470,6 +481,25 @@ function agentRow(row) {
     .onTap(() => focusAgent(row()));
 }
 
+// Same insets as an agent row, so the key and title columns line up.
+function shellRow(row) {
+  return HStack({ spacing: 5 }, [
+    Text(() => row().shortcut).font(12).monospaced().color("tertiary").lineLimit(1).fixedSize(),
+    Image("terminal").font(10).color("tertiary"),
+    Text(() => row().title).font(11).lineLimit(1).truncation("tail").color("secondary"),
+    Spacer(),
+  ])
+    .paddingLeading(18).paddingTrailing(8).paddingVertical(2)
+    .cornerRadius(CARD_RADIUS - 2)
+    .background(() => (row().focused ? MOCHA.focusFill : null))
+    .hoverBackground(MOCHA.hoverFill)
+    .cursor("pointer")
+    .frame({ maxWidth: "infinity" })
+    .onTap(() => cmux("workspace.select", { workspace_id: row().wsId }));
+}
+
+const CARD_ROW_VIEWS = { agent: agentRow, shell: shellRow };
+
 // A section label over the repo's checkouts, with no icon, so it reads apart
 // from the checkout rows; each checkout row selects its workspace.
 function repoRow(card) {
@@ -501,9 +531,9 @@ function toCards(flat) {
   for (const r of flat) {
     if (r.kind === "repo" || (r.kind === "group" && !r.nested)) divide(r.key);
     if (r.kind === "repo") cards.push({ key: r.key, kind: "repo", label: r.label });
-    else if (r.kind === "group" && r.nested) cards.push({ key: "n:" + r.key, kind: "nestedCard", group: r, agents: [] });
-    else if (r.kind === "group") cards.push({ key: r.key, kind: "card", group: r, agents: [] });
-    else if (r.kind === "agent" && cards.length) cards[cards.length - 1].agents.push(r);
+    else if (r.kind === "group" && r.nested) cards.push({ key: "n:" + r.key, kind: "nestedCard", group: r, rows: [] });
+    else if (r.kind === "group") cards.push({ key: r.key, kind: "card", group: r, rows: [] });
+    else if (Object.hasOwn(CARD_ROW_VIEWS, r.kind) && cards.length) cards[cards.length - 1].rows.push(r);
     else if (r.kind === "more") cards.push(r);
   }
   return cards;
@@ -517,7 +547,7 @@ function cardView(card, indent = 0) {
   const selected = () => card().group.selected;
   return VStack({ spacing: 1 }, [
     groupRow(() => card().group),
-    ForEach({ items: () => card().agents, key: (r) => r.key }, agentRow),
+    ForEach({ items: () => card().rows, key: (r) => r.key }, (r) => CARD_ROW_VIEWS[r().kind](r)),
   ])
     .padding(3)
     .cornerRadius(CARD_RADIUS)

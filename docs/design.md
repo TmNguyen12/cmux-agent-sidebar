@@ -1,7 +1,7 @@
 # cmux-agent-sidebar design
 
 createdAt: 2026-11-13 23:05 EST
-lastUpdated: 2026-11-21 10:25 EST
+lastUpdated: 2026-11-21 10:28 EST
 
 ## Intent
 
@@ -19,6 +19,8 @@ scripts, so it adds no new code to every agent turn.
 - Narrow-friendly: rows truncate instead of forcing a minimum width.
 - Click a group to select its workspace; click an agent to focus its terminal.
 - Show groups that have no agents, so this sidebar can replace the workspace list.
+- Reach every workspace by click, including a second shell opened on a folder
+  that already has a group.
 
 ## Non-goals
 
@@ -117,6 +119,27 @@ One line: tab key, status mark, kind symbol, title, subagent count, time.
   has more than one tab. The sidebar data has no split panes, so with splits the
   number can point at the wrong tab.
 
+### Shell rows
+
+A group row selects one workspace, the selected one on its folder or else the
+first. A second workspace on that folder with no agents, such as a new plain
+shell, would have no row of its own. So when a folder has more than one
+workspace, each of them with no visible agents gets a shell row under the
+folder's group, after the agent rows, in workspace order.
+
+One line: the workspace's `⌘N`, a terminal icon, the workspace title (else
+`shell`). No time. It shares the agent row's insets, so the key and title
+columns line up. Clicking it selects that workspace.
+
+- A folder's only workspace gets none; its group row stands for it.
+- A workspace folded into a checkout (`wsRoot`) counts toward that checkout's
+  folder. An agent whose own folder lands it in a group does not.
+- A workspace whose agents have all ended and hidden counts as having none.
+- A workspace with no folder already has its own group, so it gets none.
+- Shell rows don't count toward the group's running, waiting or total counts.
+- A workspace whose agents all sit in other folders gets none on its own
+  folder. Its agent rows already reach it.
+
 ### Status
 
 | cmux `agent.status` | Mark | Color |
@@ -176,9 +199,10 @@ For a reply short enough to arrive whole, it then reads back from the end:
 
 ### Look
 
-Header `Agents` with live running and waiting counts. Each group and its agents
-form a card; the selected workspace's card is raised with a lighter fill, a
-hairline outline and rounded corners (the runtime has no shadow). Highlight
+Header `Agents` with live running and waiting counts. Each group with its agent
+and shell rows forms a card; the selected workspace's card is raised with a
+lighter fill, a hairline outline and rounded corners (the runtime has no
+shadow). Highlight
 colors sink into Catppuccin Mocha Crust (70% card fill, full for focus, 40%
 hover) with a 25% Lavender outline, kept in one `MOCHA` table in the sidebar
 file.
