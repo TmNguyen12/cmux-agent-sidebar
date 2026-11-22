@@ -290,9 +290,8 @@ function buildRows(workspaces, epoch) {
   const wsKey = (order) => (order < 9 ? "⌘" + (order + 1) : "");
   const ordered = [...groups.values()].sort((a, b) => a.order - b.order || byKey(a.key, b.key));
 
-  // Checkouts of one repo sit under a repo row placed at the repo's first
-  // checkout, main checkout first. A folder with no known branch joins a repo
-  // only when it is that repo's main checkout.
+  // Checkouts of one repo sit under one repo row. A folder with no known
+  // branch joins a repo only when it is that repo's main checkout.
   const repos = new Map();
   for (const g of ordered) {
     const r = g.path === undefined ? undefined : repoOf(g.path, g.branch);
@@ -305,11 +304,13 @@ function buildRows(workspaces, epoch) {
     repos.set(g, { path: g.path, name, checkout: name, main: true });
   }
 
+  // Every group sits under a repo or the Folders header.
+  const labelOf = (g) => (g.path === undefined
+    ? { groupKind: "folder", label: g.title || "untitled" }
+    : groupLabel(g.path, g.branch));
+
   const emitGroup = (g, checkout) => {
-    // Every group sits under a repo or the Folders header.
-    const { groupKind, label } = g.path === undefined
-      ? { groupKind: "folder", label: g.title || "untitled" }
-      : groupLabel(g.path, g.branch);
+    const { groupKind, label } = labelOf(g);
     const tabOrder = (e) => (e.tabIndex < 0 ? Infinity : e.tabIndex);
     g.agents.sort((x, y) =>
       (x.order - y.order) || (tabOrder(x) - tabOrder(y)) || byKey(String(x.agent.id), String(y.agent.id)));
@@ -338,22 +339,21 @@ function buildRows(workspaces, epoch) {
   };
 
   // Repos first, then plain folders and folderless workspaces under one
-  // Folders header, each in workspace order.
-  const emittedRepos = new Set();
-  const folders = [];
-  for (const g of ordered) {
-    const r = repos.get(g);
-    if (!r) {
-      folders.push(g);
-      continue;
-    }
-    if (emittedRepos.has(r.path)) continue;
-    emittedRepos.add(r.path);
+  // Folders header. Each sorts by name, main checkout first: cmux can move a
+  // workspace to the top (iMessage mode, on every prompt), so workspace order
+  // would shuffle them.
+  const byName = (a, b) => byKey(a.toLowerCase(), b.toLowerCase()) || byKey(a, b);
+  const repoList = [...new Map([...repos.values()].map((r) => [r.path, r])).values()]
+    .sort((a, b) => byName(a.name, b.name) || byKey(a.path, b.path));
+  for (const r of repoList) {
     out.push({ key: "r:" + r.path, kind: "repo", label: r.name });
     const checkouts = ordered.filter((h) => repos.get(h)?.path === r.path)
-      .sort((a, b) => repos.get(b).main - repos.get(a).main);
+      .sort((a, b) => repos.get(b).main - repos.get(a).main
+        || byName(repos.get(a).checkout, repos.get(b).checkout) || byKey(a.key, b.key));
     for (const h of checkouts) emitGroup(h, repos.get(h).checkout);
   }
+  const folders = ordered.filter((g) => !repos.has(g))
+    .sort((a, b) => byName(labelOf(a).label, labelOf(b).label) || byKey(a.key, b.key));
   if (folders.length) out.push({ key: "r:folders", kind: "repo", label: "Folders" });
   for (const g of folders) emitGroup(g);
   if (out.length > MAX_ROWS) {

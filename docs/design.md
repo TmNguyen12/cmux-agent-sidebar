@@ -94,12 +94,11 @@ Placement: the left pane (chosen) or a right-sidebar panel, which has a
 - A repo shows its header even with one checkout, so adding a worktree doesn't
   reshape the list. Headers have no tap; each row under one selects its
   workspace. A thin divider sits between headers.
-- Repos keep cmux's workspace order; a repo sits at its first checkout. The
-  `Folders` header comes last. Within a repo the main checkout comes first,
-  then folder order.
-  Within a workspace, groups sort by folder: cmux moves a workspace's folder
-  to its focused tab, so ordering by which group owns the workspace folder
-  would swap groups on every tab switch.
+- Repos sort by name, ignoring case, and the `Folders` header comes last.
+  Within a repo the main checkout comes first, then checkouts by name;
+  folders sort by name. Workspace order would move rows: cmux's iMessage mode
+  moves a workspace to the top on every prompt, and cmux moves a workspace's
+  folder to its focused tab.
 - Each group shows its workspace's ⌘1…⌘9 key, including a group that is only
   an agent's folder.
 - Agents in a group keep workspace order, then tab order, then id. Status

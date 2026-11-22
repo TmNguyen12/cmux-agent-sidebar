@@ -51,7 +51,7 @@ Each agent goes under its tab's folder. Checkouts of one git repo share a header
 - A `_` or `.` folder (`_claude`, `.dotfiles`) never counts as a repo, even a real one. With no checkout to join, it goes under `FOLDERS`.
 - `✱` means uncommitted changes. Worktree rows never show it: cmux only updates branch and `✱` at a shell prompt, so they go stale once an agent moves.
 - `⌘N` selects the row's workspace. `⌃N` on an agent is its tab, shown when the workspace has more than one.
-- Rows don't move when you switch tabs or an agent changes status. Repos follow workspace order, main checkout first; agents follow tab order.
+- Rows don't move when you switch tabs or an agent changes status. Repos and their checkouts sort by name, main checkout first, so cmux's iMessage mode moving a workspace to the top doesn't move its rows; agents follow tab order.
 - cmux moves a workspace to the top when it gets a notification. To keep `⌘N` fixed, set `"app": { "reorderOnNotification": false }` in `~/.config/cmux/cmux.json` and run `cmux reload-config`.
 
 Best results: one workspace per worktree, with agents started inside it.
