@@ -46,8 +46,16 @@ test("groupLabel names a worktree by its first folder, so a subfolder doesn't re
 test("worktreeRoot trims a worktree subfolder and leaves other folders alone", () => {
   assert.equal(sb.worktreeRoot("/r/worktrees/app/feat/pkg/api"), "/r/worktrees/app/feat");
   assert.equal(sb.worktreeRoot("/r/worktrees/app/feat"), "/r/worktrees/app/feat");
+  assert.equal(sb.worktreeRoot("/r/app/.claude/worktrees/feat/pkg"), "/r/app/.claude/worktrees/feat");
   assert.equal(sb.worktreeRoot("/r/app/pkg"), "/r/app/pkg");
   assert.equal(sb.worktreeRoot(undefined), undefined);
+});
+
+test("groupLabel and repoOf read a Claude Code worktree as one of its repo's", () => {
+  assert.deepEqual(host(sb.groupLabel("/r/app/.claude/worktrees/feat/pkg", "main")),
+    { groupKind: "worktree", label: "app / feat" });
+  assert.deepEqual(host(sb.repoOf("/r/app/.claude/worktrees/feat", "main")),
+    { path: "/r/app", name: "app", checkout: "feat", main: false });
 });
 
 test("groupLabel names a worktree when the branch is unknown", () => {
@@ -181,7 +189,18 @@ test("a worktree inside a checkout keeps its row even with the checkout's stale 
   assert.deepEqual(keys([
     ws("w1", { directory: "/r/app", branch: "main", index: 0 }),
     ws("w2", { directory: "/r/app/.claude/worktrees/feat", branch: "main", index: 1 }),
-  ]), ["r:/r/app", "g:/r/app", "r:/r/app/.claude/worktrees/feat", "g:/r/app/.claude/worktrees/feat"]);
+  ]), ["r:/r/app", "g:/r/app", "g:/r/app/.claude/worktrees/feat"]);
+});
+
+test("a Claude Code worktree joins its repo, named by its folder from any subfolder", () => {
+  const r = rows([
+    ws("w1", { directory: "/r/app", branch: "main", index: 0 }),
+    ws("w2", { directory: "/r/app/.claude/worktrees/feat/pkg/api", branch: "main", index: 1 }),
+  ]);
+  assert.deepEqual(r.map((x) => x.key), ["r:/r/app", "g:/r/app", "g:/r/app/.claude/worktrees/feat"]);
+  const g = group(r, "g:/r/app/.claude/worktrees/feat");
+  assert.equal(g.label, "feat");
+  assert.equal(g.groupKind, "worktree");
 });
 
 test("a repo nested in a checkout on another branch keeps its own row", () => {
@@ -210,7 +229,7 @@ test("a workspace folds only into the outermost open checkout on its branch", ()
   assert.deepEqual(keys([
     ws("w1", { directory: "/r", branch: "main", index: 0 }),
     ws("w2", { directory: "/r/app/.claude/worktrees/feat", branch: "feat", index: 1 }),
-  ]), ["r:/r", "g:/r", "r:/r/app/.claude/worktrees/feat", "g:/r/app/.claude/worktrees/feat"]);
+  ]), ["r:/r", "g:/r", "r:/r/app", "g:/r/app/.claude/worktrees/feat"]);
 });
 
 test("a workspace doesn't fold into a folder with no branch or a sibling sharing a prefix", () => {
