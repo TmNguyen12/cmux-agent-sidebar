@@ -48,7 +48,7 @@ const LIST_ITEM = /^(?:[-*+•]|\d+[.)])\s/;
 // and ask below 7, so a low score counts as a question with no question mark.
 const CONFIDENCE = /\[confidence:\s*(\d+(?:\.\d+)?)\s*\/\s*10\b/i;
 const CONFIDENCE_ASKS_BELOW = 7;
-// cmux passes only the start of the last message, about 200 characters, so the
+// cmux passes only the start of the last message, 240 characters, so the
 // end of a long reply never arrives. The author's agents start a reply that
 // waits on an answer with "Needs you:", allowing markdown around it.
 const ASK_MARKER = /^[\s*_`#>]*needs you[*_`]*:/i;

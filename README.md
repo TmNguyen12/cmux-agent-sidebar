@@ -108,7 +108,17 @@ Codex has no equivalent; start it inside the worktree.
 
 Optional. An agent that ends its turn on a question is done to cmux, so it shows green.
 
-cmux passes a sidebar only the first 200 or so characters of an agent's last message. A question usually sits at the end, where the sidebar can't see it. Have the agent put it first.
+**Turn on cmux's iMessage mode.** cmux records an agent's reply only in this mode. With it off, the sidebar sees your own last prompt instead. In `~/.config/cmux/cmux.json`:
+
+```json
+"app": {
+  "iMessageMode": true
+}
+```
+
+Then run `cmux reload-config`. The cost: cmux moves a workspace to the top of the list on each prompt and each reply, so its ⌘N key changes.
+
+cmux passes a sidebar only the first 240 characters of an agent's last message. A question usually sits at the end, where the sidebar can't see it. Have the agent put it first.
 
 **Add to your agent instructions** (`~/.claude/CLAUDE.md`, `~/.codex/AGENTS.md`):
 
@@ -133,6 +143,7 @@ cmux passes a sidebar only the first 200 or so characters of an agent's last mes
 - **Two workspaces on one folder share a group row.** Clicking it opens the selected one, else the first. Reach the other through its agent rows, or its shell row when it has no agents.
 - **No grouping by edited files.** That would need hooks.
 - **A question in a long reply needs the marker.** Without `Needs you:` at the start it stays green, and so does a short ask with no question mark. The rules are in [docs/design.md](docs/design.md#questions).
+- **Question flags need iMessage mode.** With it off, cmux's last message is your own prompt, so a session shows orange when your prompt ends on a question mark and never when the agent asks.
 - **Question flags are untested with Codex.**
 - **One question per workspace.** cmux gives one last message per workspace, so with two agents in one workspace only the most recent can show a question.
 
