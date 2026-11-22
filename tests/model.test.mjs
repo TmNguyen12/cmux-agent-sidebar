@@ -359,12 +359,33 @@ test("ended agents hide 15 minutes after their last activity", () => {
   assert.deepEqual(k, ["r:folders", "g:/r/app", "a:w1:new"]);
 });
 
-test("groups keep cmux's workspace order, not urgency", () => {
+test("folders sort by name, not workspace order or urgency", () => {
   const k = keys([
-    ws("w1", { directory: "/r/zzz", index: 0, agents: [agent("a1", "idle")] }),
-    ws("w2", { directory: "/r/aaa", index: 1, agents: [agent("a2", "needs_input")] }),
+    ws("w1", { directory: "/r/zzz", index: 0, agents: [agent("a1", "needs_input")] }),
+    ws("w2", { directory: "/r/aaa", index: 1, agents: [agent("a2", "idle")] }),
   ]).filter((x) => x.startsWith("g:"));
-  assert.deepEqual(k, ["g:/r/zzz", "g:/r/aaa"]);
+  assert.deepEqual(k, ["g:/r/aaa", "g:/r/zzz"]);
+});
+
+test("repos sort by name, so a workspace cmux moves to the top doesn't move its repo", () => {
+  const before = keys([
+    ws("w1", { directory: "/r/Zeta", branch: "main", index: 0 }),
+    ws("w2", { directory: "/r/alpha", branch: "main", index: 1 }),
+  ]);
+  const after = keys([
+    ws("w1", { directory: "/r/Zeta", branch: "main", index: 1 }),
+    ws("w2", { directory: "/r/alpha", branch: "main", index: 0 }),
+  ]);
+  assert.deepEqual(before, ["r:/r/alpha", "g:/r/alpha", "r:/r/Zeta", "g:/r/Zeta"]);
+  assert.deepEqual(after, before);
+});
+
+test("checkouts in a repo sort by name after the main checkout", () => {
+  assert.deepEqual(keys([
+    ws("w1", { directory: "/r/worktrees/app/zed", index: 0 }),
+    ws("w2", { directory: "/r/worktrees/app/bee", index: 1 }),
+    ws("w3", { directory: "/r/app", branch: "main", index: 2 }),
+  ]), ["r:/r/app", "g:/r/app", "g:/r/worktrees/app/bee", "g:/r/worktrees/app/zed"]);
 });
 
 test("agents in a group keep tab order, not status or activity", () => {
