@@ -203,6 +203,15 @@ test("a Claude Code worktree joins its repo, named by its folder from any subfol
   assert.equal(g.groupKind, "worktree");
 });
 
+test("an agent in a Claude Code worktree keeps its row while its workspace sits on the checkout", () => {
+  const r = rows([ws("w1", {
+    directory: "/r/app", branch: "main", index: 0,
+    tabs: [{ id: "p1", title: "shell" }, { id: "p2", title: "x" }],
+    agents: [agent("a1", "working", { directory: "/r/app/.claude/worktrees/feat/pkg", panelId: "p2" })],
+  })]);
+  assert.deepEqual(r.map((x) => x.key), ["r:/r/app", "g:/r/app", "g:/r/app/.claude/worktrees/feat", "a:w1:a1"]);
+});
+
 test("a repo nested in a checkout on another branch keeps its own row", () => {
   assert.deepEqual(keys([
     ws("w1", { directory: "/r/app", branch: "main", index: 0 }),
