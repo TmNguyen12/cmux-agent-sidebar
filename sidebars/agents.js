@@ -115,44 +115,48 @@ function hiddenName(name) {
   return /^[_.]/.test(name);
 }
 
-// A worktree (…/worktrees/<repo>/<rest>), else a git checkout (branch known),
-// else a plain folder. A worktree is named by its folder: cmux reports a tab's
-// branch only at a shell prompt, so an agent that moved into the worktree
-// still carries the branch of the folder it started in.
-function groupLabel(path, branch) {
+// A worktree, from the folder layout since the sidebar can't ask git:
+// <parent>/worktrees/<repo>/<wt> beside its repo, or <repo>/.claude/worktrees/<wt>
+// where Claude Code's EnterWorktree puts it. An agent that cds into a
+// subfolder keeps that folder, so the worktree is the first folder after
+// <repo> or .claude/worktrees. A worktree named with a slash
+// (worktrees/<repo>/codex/x) shows as its first folder.
+function worktreeOf(path) {
   const parts = segments(path);
   const i = parts.lastIndexOf("worktrees");
-  if (i >= 0 && i < parts.length - 2) {
-    return { groupKind: "worktree", label: parts[i + 1] + " / " + parts[i + 2] };
-  }
+  const at = (repo, name) => ({
+    root: "/" + parts.slice(0, name + 1).join("/"), repo: "/" + repo.join("/"),
+    repoName: repo[repo.length - 1], name: parts[name],
+  });
+  if (i > 0 && parts[i - 1] === ".claude" && i < parts.length - 1) return at(parts.slice(0, i - 1), i + 1);
+  if (i >= 0 && i < parts.length - 2) return at([...parts.slice(0, i), parts[i + 1]], i + 2);
+  return undefined;
+}
+
+// A worktree, else a git checkout (branch known), else a plain folder. A
+// worktree is named by its folder: cmux reports a tab's branch only at a shell
+// prompt, so an agent that moved into the worktree still carries the branch of
+// the folder it started in.
+function groupLabel(path, branch) {
+  const wt = worktreeOf(path);
+  if (wt) return { groupKind: "worktree", label: wt.repoName + " / " + wt.name };
+  const parts = segments(path);
   const name = parts.length ? parts[parts.length - 1] : path;
   if (branch !== undefined && !hiddenName(name)) return { groupKind: "repo", label: name + " · " + branch };
   return { groupKind: "folder", label: name };
 }
 
-// The repo a checkout belongs to, from the folder layout: <parent>/<repo> and
-// <parent>/worktrees/<repo>/<rest> are one repo. The sidebar can't ask git.
+// The repo a checkout belongs to: a worktree's repo, else the checkout itself.
 function repoOf(path, branch) {
+  const wt = worktreeOf(path);
+  if (wt) return { path: wt.repo, name: wt.repoName, checkout: wt.name, main: false };
   const parts = segments(path);
-  const i = parts.lastIndexOf("worktrees");
-  if (i >= 0 && i < parts.length - 2) {
-    return {
-      path: "/" + [...parts.slice(0, i), parts[i + 1]].join("/"),
-      name: parts[i + 1], checkout: parts[i + 2], main: false,
-    };
-  }
   if (branch === undefined || parts.length === 0 || hiddenName(parts[parts.length - 1])) return undefined;
   return { path: "/" + parts.join("/"), name: parts[parts.length - 1], checkout: branch, main: true };
 }
 
-// An agent that cds into a subfolder keeps that folder, so a worktree is
-// …/worktrees/<repo>/<first folder>. A worktree named with a slash
-// (worktrees/<repo>/codex/x) shows as its first folder.
 function worktreeRoot(path) {
-  const parts = segments(path);
-  const i = parts.lastIndexOf("worktrees");
-  if (i < 0 || i >= parts.length - 3) return path;
-  return "/" + parts.slice(0, i + 3).join("/");
+  return worktreeOf(path)?.root ?? path;
 }
 
 // Claude Code names its terminal tab after the conversation, and a tab you

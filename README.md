@@ -42,6 +42,7 @@ Each agent goes under its tab's folder. Checkouts of one git repo share a header
 |---|---|
 | `<parent>/<repo>` | `branch`, under `REPO` |
 | `<parent>/worktrees/<repo>/<folder>/…` | `folder`, under `REPO` |
+| `<repo>/.claude/worktrees/<folder>/…` (Claude Code's `EnterWorktree`) | `folder`, under `REPO` |
 | Any other folder | folder name, under `FOLDERS` |
 | Workspace with no folder | workspace name, under `FOLDERS` |
 
