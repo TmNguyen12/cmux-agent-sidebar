@@ -197,7 +197,7 @@ test("an agent in a _ folder with its tab's branch is a plain folder", () => {
     tabs: [{ id: "p1", title: "x", branch: "main" }],
     agents: [agent("a1", "working", { directory: "/r/app/_claude", panelId: "p1" })],
   })]);
-  assert.deepEqual(r.map((x) => x.key), ["r:folders", "g:/Users/t", "g:/r/app/_claude", "a:w1:a1"]);
+  assert.deepEqual(r.map((x) => x.key), ["r:folders", "g:/r/app/_claude", "a:w1:a1", "g:/Users/t"]);
   assert.equal(group(r, "g:/r/app/_claude").label, "_claude");
 });
 
@@ -210,7 +210,7 @@ test("a workspace folds only into the outermost open checkout on its branch", ()
   assert.deepEqual(keys([
     ws("w1", { directory: "/r", branch: "main", index: 0 }),
     ws("w2", { directory: "/r/app/.claude/worktrees/feat", branch: "feat", index: 1 }),
-  ]), ["r:/r", "g:/r", "r:/r/app/.claude/worktrees/feat", "g:/r/app/.claude/worktrees/feat"]);
+  ]), ["r:/r/app/.claude/worktrees/feat", "g:/r/app/.claude/worktrees/feat", "r:/r", "g:/r"]);
 });
 
 test("a workspace doesn't fold into a folder with no branch or a sibling sharing a prefix", () => {
@@ -359,12 +359,33 @@ test("ended agents hide 15 minutes after their last activity", () => {
   assert.deepEqual(k, ["r:folders", "g:/r/app", "a:w1:new"]);
 });
 
-test("groups keep cmux's workspace order, not urgency", () => {
+test("folders sort by name, not workspace order or urgency", () => {
   const k = keys([
-    ws("w1", { directory: "/r/zzz", index: 0, agents: [agent("a1", "idle")] }),
-    ws("w2", { directory: "/r/aaa", index: 1, agents: [agent("a2", "needs_input")] }),
+    ws("w1", { directory: "/r/zzz", index: 0, agents: [agent("a1", "needs_input")] }),
+    ws("w2", { directory: "/r/aaa", index: 1, agents: [agent("a2", "idle")] }),
   ]).filter((x) => x.startsWith("g:"));
-  assert.deepEqual(k, ["g:/r/zzz", "g:/r/aaa"]);
+  assert.deepEqual(k, ["g:/r/aaa", "g:/r/zzz"]);
+});
+
+test("repos sort by name, so a workspace cmux moves to the top doesn't move its repo", () => {
+  const before = keys([
+    ws("w1", { directory: "/r/Zeta", branch: "main", index: 0 }),
+    ws("w2", { directory: "/r/alpha", branch: "main", index: 1 }),
+  ]);
+  const after = keys([
+    ws("w1", { directory: "/r/Zeta", branch: "main", index: 1 }),
+    ws("w2", { directory: "/r/alpha", branch: "main", index: 0 }),
+  ]);
+  assert.deepEqual(before, ["r:/r/alpha", "g:/r/alpha", "r:/r/Zeta", "g:/r/Zeta"]);
+  assert.deepEqual(after, before);
+});
+
+test("checkouts in a repo sort by name after the main checkout", () => {
+  assert.deepEqual(keys([
+    ws("w1", { directory: "/r/worktrees/app/zed", index: 0 }),
+    ws("w2", { directory: "/r/worktrees/app/bee", index: 1 }),
+    ws("w3", { directory: "/r/app", branch: "main", index: 2 }),
+  ]), ["r:/r/app", "g:/r/app", "g:/r/worktrees/app/bee", "g:/r/worktrees/app/zed"]);
 });
 
 test("agents in a group keep tab order, not status or activity", () => {

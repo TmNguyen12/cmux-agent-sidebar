@@ -290,9 +290,8 @@ function buildRows(workspaces, epoch) {
   const wsKey = (order) => (order < 9 ? "⌘" + (order + 1) : "");
   const ordered = [...groups.values()].sort((a, b) => a.order - b.order || byKey(a.key, b.key));
 
-  // Checkouts of one repo sit under a repo row placed at the repo's first
-  // checkout, main checkout first. A folder with no known branch joins a repo
-  // only when it is that repo's main checkout.
+  // Checkouts of one repo sit under one repo row. A folder with no known
+  // branch joins a repo only when it is that repo's main checkout.
   const repos = new Map();
   for (const g of ordered) {
     const r = g.path === undefined ? undefined : repoOf(g.path, g.branch);
@@ -305,11 +304,13 @@ function buildRows(workspaces, epoch) {
     repos.set(g, { path: g.path, name, checkout: name, main: true });
   }
 
+  // Every group sits under a repo or the Folders header.
+  const labelOf = (g) => (g.path === undefined
+    ? { groupKind: "folder", label: g.title || "untitled" }
+    : groupLabel(g.path, g.branch));
+
   const emitGroup = (g, checkout) => {
-    // Every group sits under a repo or the Folders header.
-    const { groupKind, label } = g.path === undefined
-      ? { groupKind: "folder", label: g.title || "untitled" }
-      : groupLabel(g.path, g.branch);
+    const { groupKind, label } = labelOf(g);
     const tabOrder = (e) => (e.tabIndex < 0 ? Infinity : e.tabIndex);
     g.agents.sort((x, y) =>
       (x.order - y.order) || (tabOrder(x) - tabOrder(y)) || byKey(String(x.agent.id), String(y.agent.id)));
@@ -338,22 +339,21 @@ function buildRows(workspaces, epoch) {
   };
 
   // Repos first, then plain folders and folderless workspaces under one
-  // Folders header, each in workspace order.
-  const emittedRepos = new Set();
-  const folders = [];
-  for (const g of ordered) {
-    const r = repos.get(g);
-    if (!r) {
-      folders.push(g);
-      continue;
-    }
-    if (emittedRepos.has(r.path)) continue;
-    emittedRepos.add(r.path);
+  // Folders header. Each sorts by name, main checkout first: cmux can move a
+  // workspace to the top (iMessage mode, on every prompt), so workspace order
+  // would shuffle them.
+  const byName = (a, b) => byKey(a.toLowerCase(), b.toLowerCase()) || byKey(a, b);
+  const repoList = [...new Map([...repos.values()].map((r) => [r.path, r])).values()]
+    .sort((a, b) => byName(a.name, b.name) || byKey(a.path, b.path));
+  for (const r of repoList) {
     out.push({ key: "r:" + r.path, kind: "repo", label: r.name });
     const checkouts = ordered.filter((h) => repos.get(h)?.path === r.path)
-      .sort((a, b) => repos.get(b).main - repos.get(a).main);
+      .sort((a, b) => repos.get(b).main - repos.get(a).main
+        || byName(repos.get(a).checkout, repos.get(b).checkout) || byKey(a.key, b.key));
     for (const h of checkouts) emitGroup(h, repos.get(h).checkout);
   }
+  const folders = ordered.filter((g) => !repos.has(g))
+    .sort((a, b) => byName(labelOf(a).label, labelOf(b).label) || byKey(a.key, b.key));
   if (folders.length) out.push({ key: "r:folders", kind: "repo", label: "Folders" });
   for (const g of folders) emitGroup(g);
   if (out.length > MAX_ROWS) {
@@ -378,6 +378,8 @@ const MOCHA = {
   dirty: "#f9e2af", // Yellow
 };
 const CARD_RADIUS = 6;
+// Every text size in the sidebar, so raising these scales it as a whole.
+const FONT = { xs: 12, sm: 13, md: 14, lg: 15 };
 
 function fmtElapsed(secs) {
   const s = Math.max(0, Math.floor(secs));
@@ -427,25 +429,25 @@ const counts = computed(() => {
 
 function headerRow() {
   return HStack({ spacing: 6 }, [
-    Text("Agents").font(13).weight("semibold").lineLimit(1),
+    Text("Agents").font(FONT.lg).weight("semibold").lineLimit(1),
     Spacer(),
     Text(() => (counts().waiting > 0 ? "● " + counts().waiting : ""))
-      .font(11).monospaced().color(STATUS.needs_input.color).lineLimit(1).fixedSize(),
+      .font(FONT.sm).monospaced().color(STATUS.needs_input.color).lineLimit(1).fixedSize(),
     Text(() => (counts().working > 0 ? "● " + counts().working : ""))
-      .font(11).monospaced().color(STATUS.working.color).lineLimit(1).fixedSize(),
+      .font(FONT.sm).monospaced().color(STATUS.working.color).lineLimit(1).fixedSize(),
   ]).paddingHorizontal(8);
 }
 
 function groupRow(row) {
   return HStack({ spacing: 5 }, [
     // Leading, so the key sits by the name and never reads as a time.
-    Text(() => row().shortcut).font(12).monospaced().color("tertiary").lineLimit(1).fixedSize(),
+    Text(() => row().shortcut).font(FONT.md).monospaced().color("tertiary").lineLimit(1).fixedSize(),
     Image(() => (row().groupKind === "folder" ? "folder" : "arrow.triangle.branch"))
-      .font(10).color("tertiary"),
+      .font(FONT.xs).color("tertiary"),
     Text(() => row().label)
-      .font(12).weight("semibold").lineLimit(1).truncation("middle")
+      .font(FONT.md).weight("semibold").lineLimit(1).truncation("middle")
       .color(() => (row().selected ? "primary" : "secondary")),
-    Text(() => (row().dirty ? "✱" : "")).font(10).color(MOCHA.dirty).fixedSize(),
+    Text(() => (row().dirty ? "✱" : "")).font(FONT.xs).color(MOCHA.dirty).fixedSize(),
     Spacer(),
   ])
     .paddingHorizontal(8).paddingVertical(3)
@@ -459,18 +461,18 @@ function groupRow(row) {
 function agentRow(row) {
   const a = () => row().agent;
   return HStack({ spacing: 5 }, [
-    Text(() => row().tabKey).font(12).monospaced().color("tertiary").lineLimit(1).fixedSize(),
+    Text(() => row().tabKey).font(FONT.md).monospaced().color("tertiary").lineLimit(1).fixedSize(),
     Text(() => statusMeta(row().status).mark)
-      .font(10).color(() => statusMeta(row().status).color).fixedSize(),
-    Text(() => row().symbol).font(12).weight("bold").color(() => kindColor(row().agent.kind)).fixedSize(),
+      .font(FONT.xs).color(() => statusMeta(row().status).color).fixedSize(),
+    Text(() => row().symbol).font(FONT.md).weight("bold").color(() => kindColor(row().agent.kind)).fixedSize(),
     Text(() => row().title)
-      .font(11).lineLimit(1).truncation("tail")
+      .font(FONT.sm).lineLimit(1).truncation("tail")
       .color(() => (a().status === "ended" ? "tertiary" : "primary")),
     Text(() => (row().subagents > 0 ? "↳" + row().subagents : ""))
-      .font(10).monospaced().color(STATUS.working.color).fixedSize(),
+      .font(FONT.xs).monospaced().color(STATUS.working.color).fixedSize(),
     Spacer(),
     Text(() => agentTime(a(), epochNow()))
-      .font(10).monospaced().color("tertiary").lineLimit(1).fixedSize().layoutPriority(2),
+      .font(FONT.xs).monospaced().color("tertiary").lineLimit(1).fixedSize().layoutPriority(2),
   ])
     .paddingLeading(18).paddingTrailing(8).paddingVertical(2)
     .cornerRadius(CARD_RADIUS - 2)
@@ -484,9 +486,9 @@ function agentRow(row) {
 // Same insets as an agent row, so the key and title columns line up.
 function shellRow(row) {
   return HStack({ spacing: 5 }, [
-    Text(() => row().shortcut).font(12).monospaced().color("tertiary").lineLimit(1).fixedSize(),
-    Image("terminal").font(10).color("tertiary"),
-    Text(() => row().title).font(11).lineLimit(1).truncation("tail").color("secondary"),
+    Text(() => row().shortcut).font(FONT.md).monospaced().color("tertiary").lineLimit(1).fixedSize(),
+    Image("terminal").font(FONT.xs).color("tertiary"),
+    Text(() => row().title).font(FONT.sm).lineLimit(1).truncation("tail").color("secondary"),
     Spacer(),
   ])
     .paddingLeading(18).paddingTrailing(8).paddingVertical(2)
@@ -505,7 +507,7 @@ const CARD_ROW_VIEWS = { agent: agentRow, shell: shellRow };
 function repoRow(card) {
   return HStack({ spacing: 5 }, [
     Text(() => card().label.toUpperCase())
-      .font(10).weight("semibold").lineLimit(1).truncation("middle").color("tertiary"),
+      .font(FONT.xs).weight("semibold").lineLimit(1).truncation("middle").color("tertiary"),
     Spacer(),
   ])
     .paddingHorizontal(11).paddingVertical(2)
@@ -514,7 +516,7 @@ function repoRow(card) {
 
 function moreRow(row) {
   return Text(() => row().text)
-    .font(10).color("tertiary").lineLimit(1)
+    .font(FONT.xs).color("tertiary").lineLimit(1)
     .paddingHorizontal(8).paddingVertical(2)
     .frame({ maxWidth: "infinity" });
 }
@@ -574,7 +576,7 @@ sidebar(() =>
     Text(() => (rows().length === 0
       ? "No workspaces yet. Agents started in cmux terminals show up here."
       : ""))
-      .font(11).color("tertiary").paddingHorizontal(8),
+      .font(FONT.sm).color("tertiary").paddingHorizontal(8),
     Spacer(),
   ]).paddingHorizontal(4).paddingVertical(8),
   { surface: "glass" },
