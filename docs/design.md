@@ -53,13 +53,15 @@ Placement: the left pane (chosen) or a right-sidebar panel, which has a
 ### Groups
 
 - An agent's folder is `agent.directory`, else its workspace's `directory`.
-  A folder inside a workspace's folder belongs to that workspace's group.
+  A folder inside a workspace's folder belongs to that workspace's group,
+  unless it is in a worktree inside it (`.claude/worktrees/<wt>`).
 - Branch and dirty state come from the agent's hosting tab
   (`agent.panelId` → `workspace.tabs[k].id`), else the workspace.
 - cmux updates a tab's branch and dirty state only at a shell prompt. An agent
   that moves into a worktree keeps the old ones, so worktree groups ignore both.
 - Repo, by folder layout (`repoOf`), since the runtime can't run git:
-  `<parent>/worktrees/<repo>/<wt>` and `<parent>/<repo>` are one repo. A
+  `<parent>/worktrees/<repo>/<wt>`, `<repo>/.claude/worktrees/<wt>` and
+  `<parent>/<repo>` are one repo. A
   folder with a known branch is its own repo, unless it folds into a checkout
   or is named `_…` or `.…` (below). A folder with no known branch joins a repo
   only as that repo's main checkout.
@@ -77,15 +79,16 @@ Placement: the left pane (chosen) or a right-sidebar panel, which has a
 - A `_` or `.` folder (`hiddenName`) is never a repo, so with no checkout to
   join it is a plain folder. The cost: a real repo named that way, such as
   `~/.dotfiles`, also shows as a plain folder.
-- A worktree is `…/worktrees/<repo>/<wt>`, the first folder only
-  (`worktreeRoot`). Claude Code keeps an agent's `cd`, so its folder can be a
+- A worktree is `…/worktrees/<repo>/<wt>` or, where Claude Code's
+  `EnterWorktree` puts it, `<repo>/.claude/worktrees/<wt>`, the first folder
+  only (`worktreeOf`). Claude Code keeps an agent's `cd`, so its folder can be a
   subfolder; trimming keeps it in its worktree's group. A worktree named with
   a slash shows as its first folder.
 - Label, by the first rule that applies:
 
   | Folder | Label | Icon |
   | --- | --- | --- |
-  | `…/worktrees/<repo>/<wt>/…` | `<wt>` under the `<repo>` header, no `✱` | branch |
+  | `…/worktrees/<repo>/<wt>/…`, `<repo>/.claude/worktrees/<wt>/…` | `<wt>` under the `<repo>` header, no `✱` | branch |
   | Branch known, not named `_…` or `.…` | `<branch>` under the `<folder>` header | branch |
   | Main checkout of a repo, branch unknown | `<folder>` under its header | folder |
   | Otherwise | `<folder>` under the `Folders` header | folder |
