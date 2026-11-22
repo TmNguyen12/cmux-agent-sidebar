@@ -1,7 +1,7 @@
 # cmux-agent-sidebar design
 
 createdAt: 2026-11-13 23:05 EST
-lastUpdated: 2026-11-21 10:28 EST
+lastUpdated: 2026-11-21 22:30 EST
 
 ## Intent
 
@@ -97,12 +97,11 @@ Placement: the left pane (chosen) or a right-sidebar panel, which has a
 - A repo shows its header even with one checkout, so adding a worktree doesn't
   reshape the list. Headers have no tap; each row under one selects its
   workspace. A thin divider sits between headers.
-- Repos keep cmux's workspace order; a repo sits at its first checkout. The
-  `Folders` header comes last. Within a repo the main checkout comes first,
-  then folder order.
-  Within a workspace, groups sort by folder: cmux moves a workspace's folder
-  to its focused tab, so ordering by which group owns the workspace folder
-  would swap groups on every tab switch.
+- Repos sort by name, ignoring case, and the `Folders` header comes last.
+  Within a repo the main checkout comes first, then checkouts by name;
+  folders sort by name. Workspace order would move rows: cmux's iMessage mode
+  moves a workspace to the top on every prompt, and cmux moves a workspace's
+  folder to its focused tab.
 - Each group shows its workspace's ⌘1…⌘9 key, including a group that is only
   an agent's folder.
 - Agents in a group keep workspace order, then tab order, then id. Status
@@ -161,9 +160,13 @@ it as `needs_input` instead, and counts it as waiting. Its time still reads
 `12m ago`: how long since it asked.
 
 - The text comes from `workspace.latestMessage`, read but never shown.
-- cmux passes only the start of the message: about 200 characters on cmux
-  0.65.2. A question usually sits at the end, so in a long reply it never
-  arrives.
+- cmux records an agent's reply as the last message only in iMessage mode
+  (`app.iMessageMode`, off by default). With it off, `latestMessage` is the
+  user's last prompt, and the checks below run on that instead. The README
+  has the setting. Its cost: cmux moves a workspace to the top on each prompt
+  and each reply, so ⌘N keys shift.
+- cmux passes only the start of the message: 240 characters on cmux 0.65.2.
+  A question usually sits at the end, so in a long reply it never arrives.
 - The author's agents are told to start a reply that waits on an answer with
   `Needs you:`. The README has the instruction line.
 - cmux gives one last message per workspace. It is read as the message of the
