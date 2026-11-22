@@ -53,7 +53,8 @@ Placement: the left pane (chosen) or a right-sidebar panel, which has a
 ### Groups
 
 - An agent's folder is `agent.directory`, else its workspace's `directory`.
-  A folder inside a workspace's folder belongs to that workspace's group.
+  A folder inside a workspace's folder belongs to that workspace's group,
+  unless it is in a worktree inside it (`.claude/worktrees/<wt>`).
 - Branch and dirty state come from the agent's hosting tab
   (`agent.panelId` → `workspace.tabs[k].id`), else the workspace.
 - cmux updates a tab's branch and dirty state only at a shell prompt. An agent

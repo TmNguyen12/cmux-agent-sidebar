@@ -184,6 +184,8 @@ function buildRows(workspaces, epoch) {
   // outermost open checkout that holds it on the same branch. A worktree
   // inside a checkout (.claude/worktrees/<wt>) never folds: its reported
   // branch can be the checkout's, stale from before an agent moved in.
+  const holds = (outer, dir) => dir.startsWith(outer + "/")
+    && !segments(dir.slice(outer.length)).includes("worktrees");
   const checkouts = workspaces
     .filter((w) => w.branch !== undefined)
     .map((w) => ({ dir: worktreeRoot(normPath(w.directory)), branch: w.branch }))
@@ -191,8 +193,7 @@ function buildRows(workspaces, epoch) {
     .sort((a, b) => a.dir.length - b.dir.length);
   const wsRoot = (w) => {
     const dir = worktreeRoot(normPath(w.directory));
-    const outer = dir && checkouts.find((c) => c.branch === w.branch && dir.startsWith(c.dir + "/")
-      && !segments(dir.slice(c.dir.length)).includes("worktrees"));
+    const outer = dir && checkouts.find((c) => c.branch === w.branch && holds(c.dir, dir));
     return outer ? outer.dir : dir;
   };
 
@@ -203,7 +204,7 @@ function buildRows(workspaces, epoch) {
     .filter((d) => d)
     .sort((a, b) => b.length - a.length);
   const groupOf = (dir) =>
-    wsDirs.find((d) => dir === d || dir.startsWith(d + "/")) ?? dir;
+    wsDirs.find((d) => dir === d || holds(d, dir)) ?? dir;
   const wsCount = new Map();
   for (const d of wsDirs) wsCount.set(d, (wsCount.get(d) ?? 0) + 1);
 
